@@ -40,9 +40,27 @@
   (file-name-directory (or load-file-name buffer-file-name))
   "Directory where nepali.el is installed.")
 
+(defvar nepali--zip-file
+  (expand-file-name "ne_NP_dict.zip" nepali--directory)
+  "Path to the bundled dictionary zip file.")
+
 (defvar nepali--dict-directory
   (expand-file-name "ne_NP_dict" nepali--directory)
   "Directory containing the ne_NP Hunspell dictionary files.")
+
+(defun nepali--ensure-dict ()
+  "Unzip the dictionary on first use if not already extracted."
+  (unless (file-exists-p (expand-file-name "ne_NP.dic" nepali--dict-directory))
+    (unless (file-exists-p nepali--zip-file)
+      (user-error "Dictionary not found: %s" nepali--zip-file))
+    (message "nepali.el: extracting dictionary...")
+    (make-directory nepali--dict-directory t)
+    (let ((exit-code (call-process "unzip" nil nil nil
+                                   "-o" nepali--zip-file
+                                   "-d" nepali--dict-directory)))
+      (unless (zerop exit-code)
+        (user-error "Failed to unzip dictionary (exit code %d)" exit-code))
+      (message "nepali.el: dictionary ready."))))
 
 (defun nepali--hunspell-available-p ()
   "Return path to hunspell if available, nil otherwise."
@@ -60,6 +78,7 @@
 (defun nepali--setup-ispell ()
   "Configure ispell to use hunspell with the bundled ne_NP dictionary."
   (nepali--ensure-hunspell)
+  (nepali--ensure-dict)
   (setq-local ispell-program-name (nepali--hunspell-available-p))
   (setq-local ispell-local-dictionary "ne_NP")
   (setq-local ispell-local-dictionary-alist
