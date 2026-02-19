@@ -1,10 +1,10 @@
 ;;; nepali.el --- Nepali spellcheck via flyspell + hunspell -*- lexical-binding: t; -*-
 
-;; Author: Krishna
+;; Author: Krishna Thapa
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "25.1"))
 ;; Keywords: i18n, languages, nepali, spellcheck
-;; URL: https://github.com/krishna/nepali.el
+;; URL: https://github.com/thapakrish/nepali.el
 
 ;;; Commentary:
 
