@@ -37,7 +37,7 @@ Install hunspell:
 
 ```elisp
 (use-package nepali
-  :straight (:host github :repo "krishna/nepali.el"
+  :straight (:host github :repo "nepalibhasha/nepali.el"
              :files ("nepali.el" "ne_NP_dict.zip"))
   :commands (nepali-flyspell-mode nepali-check-buffer nepali-check-word)
   :hook (text-mode . nepali-flyspell-mode))

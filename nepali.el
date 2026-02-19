@@ -4,7 +4,7 @@
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "25.1"))
 ;; Keywords: i18n, languages, nepali, spellcheck
-;; URL: https://github.com/thapakrish/nepali.el
+;; URL: https://github.com/nepalibhasha/nepali.el
 
 ;;; Commentary:
 
