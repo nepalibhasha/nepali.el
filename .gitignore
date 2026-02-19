@@ -3,4 +3,5 @@ ne_NP_dict/
 *.tsv
 parse_dict.py
 test-nepali.el
+sample.txt
 .DS_Store
