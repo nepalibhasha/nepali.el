@@ -57,7 +57,7 @@ The ne_NP dictionary (LGPL 2.1) includes:
 
 - ~36,800 base Nepali words
 - 50 affix rule groups for suffix/prefix expansion (verb conjugations, case markers, plurals, etc.)
-- 24 common replacement pairs for suggestions (e.g. ि↔ी, स↔श, ं↔ँ)
+- 24 common replacement pairs for suggestions (short/long vowel marks, sa/sha, anusvara/chandrabindu, etc.)
 
 ## License
 
