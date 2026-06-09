@@ -183,7 +183,7 @@ diagnostics."
   "Signal an error if varnavinyas is not installed."
   (unless (nepali--varnavinyas-available-p)
     (user-error
-     "nepali.el requires varnavinyas for this backend.  Put varnavinyas on `exec-path' or set `nepali-varnavinyas-program' to the CLI path.")))
+     "nepali.el requires varnavinyas for this backend.  Download a release binary from GitHub Releases, put it on `exec-path', or set `nepali-varnavinyas-program' to that executable.")))
 
 (defun nepali--varnavinyas-args ()
   "Return command arguments for varnavinyas JSON diagnostics."
