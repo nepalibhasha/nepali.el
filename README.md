@@ -109,7 +109,7 @@ When `nepali-varnavinyas-mode` is enabled:
 | `C-c n l` | List current diagnostics |
 | `C-c n c` | Clear diagnostics |
 
-The command menu uses `transient` when available, following the same interaction style as Magit. If `transient` is not installed, all direct commands and key bindings still work.
+The command menu uses `transient` when available, following the same interaction style as Magit. It stays open after actions, so you can check the buffer and then press `n` repeatedly to move through diagnostics. If `transient` is not installed, all direct commands and key bindings still work.
 
 Optional grammar/samasa heuristics can be enabled with:
 

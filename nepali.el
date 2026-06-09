@@ -489,23 +489,23 @@ Returned diagnostics use absolute buffer line and column positions."
   (transient-define-prefix nepali-varnavinyas--dispatch ()
     "Dispatch Varnavinyas commands."
     [["Check"
-      ("w" "word" nepali-varnavinyas-check-word)
-      ("r" "region" nepali-varnavinyas-check-region)
-      ("b" "buffer" nepali-varnavinyas-check-buffer)]
+      ("w" "word" nepali-varnavinyas-check-word :transient t)
+      ("r" "region" nepali-varnavinyas-check-region :transient t)
+      ("b" "buffer" nepali-varnavinyas-check-buffer :transient t)]
      ["Diagnostics"
-      ("n" "next" nepali-varnavinyas-next-diagnostic)
-      ("p" "previous" nepali-varnavinyas-previous-diagnostic)
-      ("d" "at point" nepali-varnavinyas-diagnostic-at-point)
-      ("l" "list" nepali-show-diagnostics)
-      ("c" "clear" nepali-clear-diagnostics)]
+      ("n" "next" nepali-varnavinyas-next-diagnostic :transient t)
+      ("p" "previous" nepali-varnavinyas-previous-diagnostic :transient t)
+      ("d" "at point" nepali-varnavinyas-diagnostic-at-point :transient t)
+      ("l" "list" nepali-show-diagnostics :transient t)
+      ("c" "clear" nepali-clear-diagnostics :transient t)]
      ["Modes"
-      ("m" "varnavinyas mode" nepali-varnavinyas-mode)
-      ("f" "flymake" nepali-varnavinyas-flymake-mode)]
+      ("m" "varnavinyas mode" nepali-varnavinyas-mode :transient t)
+      ("f" "flymake" nepali-varnavinyas-flymake-mode :transient t)]
      ["Options"
-      ("g" "toggle grammar" nepali-varnavinyas-toggle-grammar)
-      ("v" "backend: varnavinyas" nepali-varnavinyas-set-backend)
-      ("h" "backend: hunspell" nepali-hunspell-set-backend)
-      ("s" "status" nepali-varnavinyas-status)]]))
+      ("g" "toggle grammar" nepali-varnavinyas-toggle-grammar :transient t)
+      ("v" "backend: varnavinyas" nepali-varnavinyas-set-backend :transient t)
+      ("h" "backend: hunspell" nepali-hunspell-set-backend :transient t)
+      ("s" "status" nepali-varnavinyas-status :transient t)]]))
 
 (defun nepali--flymake-type (diagnostic)
   "Return a Flymake type for a varnavinyas DIAGNOSTIC."
