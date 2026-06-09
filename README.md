@@ -63,13 +63,13 @@ The Varnavinyas workflow is optional and experimental. It does not force Varnavi
 
 ### Quick start
 
-Install or build the Varnavinyas CLI, then configure it if needed:
+Install the Varnavinyas CLI separately, then configure it if needed:
 
 ```elisp
 (setq nepali-varnavinyas-program "/path/to/varnavinyas")
 ```
 
-If this repository is checked out next to `../varnavinyas`, the local `target/release/varnavinyas` or `target/debug/varnavinyas` binary is auto-detected.
+That path can be a system install, a downloaded release artifact, or any other executable you want to use.
 
 Enable the Varnavinyas key bindings:
 
@@ -181,21 +181,6 @@ If you see an error that Varnavinyas is required, either put `varnavinyas` on Em
 
 ```elisp
 (setq nepali-varnavinyas-program "/absolute/path/to/varnavinyas")
-```
-
-In a sibling checkout layout like:
-
-```text
-nepalibhasha/
-  nepali.el/
-  varnavinyas/
-```
-
-`nepali.el` automatically checks:
-
-```text
-../varnavinyas/target/release/varnavinyas
-../varnavinyas/target/debug/varnavinyas
 ```
 
 If the command menu is unavailable, install `transient` or use the direct `M-x nepali-varnavinyas-*` commands.

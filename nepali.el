@@ -172,11 +172,7 @@ diagnostics."
                   (list
                    (executable-find nepali-varnavinyas-program)
                    (when (string-match-p "/" nepali-varnavinyas-program)
-                     (expand-file-name nepali-varnavinyas-program))
-                   (expand-file-name "../varnavinyas/target/release/varnavinyas"
-                                     nepali--directory)
-                   (expand-file-name "../varnavinyas/target/debug/varnavinyas"
-                                     nepali--directory)))))
+                     (expand-file-name nepali-varnavinyas-program))))))
 
 (defun nepali--varnavinyas-command ()
   "Return the resolved varnavinyas command path."
@@ -187,15 +183,7 @@ diagnostics."
   "Signal an error if varnavinyas is not installed."
   (unless (nepali--varnavinyas-available-p)
     (user-error
-     "nepali.el requires varnavinyas for this backend.  Set `nepali-varnavinyas-program' to the CLI path, or put varnavinyas on `exec-path'.  Tried: %s"
-     (string-join
-      (delq nil
-            (list nepali-varnavinyas-program
-                  (expand-file-name "../varnavinyas/target/release/varnavinyas"
-                                    nepali--directory)
-                  (expand-file-name "../varnavinyas/target/debug/varnavinyas"
-                                    nepali--directory)))
-      ", "))))
+     "nepali.el requires varnavinyas for this backend.  Put varnavinyas on `exec-path' or set `nepali-varnavinyas-program' to the CLI path.")))
 
 (defun nepali--varnavinyas-args ()
   "Return command arguments for varnavinyas JSON diagnostics."
