@@ -87,6 +87,8 @@ Then run:
 | `M-x nepali-varnavinyas-next-diagnostic` | Move to the next diagnostic |
 | `M-x nepali-varnavinyas-previous-diagnostic` | Move to the previous diagnostic |
 | `M-x nepali-varnavinyas-diagnostic-at-point` | Show the diagnostic message at point |
+| `M-x nepali-varnavinyas-apply-correction-at-point` | Choose and apply a correction at point |
+| `M-x nepali-varnavinyas-apply-all-corrections` | Apply all safe direct corrections |
 | `M-x nepali-varnavinyas-flymake-mode` | Show Varnavinyas diagnostics through Flymake |
 
 You can also call Varnavinyas-specific commands directly without changing `nepali-backend`:
@@ -108,12 +110,16 @@ When `nepali-varnavinyas-mode` is enabled:
 | `C-c n n` | Move to next diagnostic |
 | `C-c n p` | Move to previous diagnostic |
 | `C-c n d` | Show diagnostic at point |
+| `C-c n a` | Choose and apply correction at point |
+| `C-c n A` | Apply all safe direct corrections |
 | `C-c n l` | List current diagnostics |
 | `C-c n c` | Clear diagnostics |
 
 The command menu uses `transient` when available, following the same interaction style as Magit. It stays open after actions, so you can check the buffer and then press `n` repeatedly to move through diagnostics. If `transient` is not installed, all direct commands and key bindings still work.
 
-In the diagnostics summary buffer, press `RET` on a diagnostic line to jump back to the source location.
+Corrections use Varnavinyas as the diagnostic authority. If Hunspell is available, its suggestions are included as alternate choices when applying one diagnostic. Bulk correction applies only non-ambiguous Varnavinyas error diagnostics with direct corrections.
+
+In the diagnostics summary buffer, press `RET` on a diagnostic line to jump back to the source location, or `a` to apply a correction.
 
 Optional grammar/samasa heuristics can be enabled with:
 

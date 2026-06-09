@@ -87,6 +87,7 @@ diagnostics."
 (defvar nepali-varnavinyas-summary-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") #'nepali-varnavinyas-summary-goto-diagnostic)
+    (define-key map (kbd "a") #'nepali-varnavinyas-summary-apply-correction)
     (define-key map (kbd "n") #'next-line)
     (define-key map (kbd "p") #'previous-line)
     (define-key map (kbd "q") #'quit-window)
@@ -101,6 +102,8 @@ diagnostics."
     (define-key map (kbd "C-c n n") #'nepali-varnavinyas-next-diagnostic)
     (define-key map (kbd "C-c n p") #'nepali-varnavinyas-previous-diagnostic)
     (define-key map (kbd "C-c n d") #'nepali-varnavinyas-diagnostic-at-point)
+    (define-key map (kbd "C-c n a") #'nepali-varnavinyas-apply-correction-at-point)
+    (define-key map (kbd "C-c n A") #'nepali-varnavinyas-apply-all-corrections)
     (define-key map (kbd "C-c n l") #'nepali-show-diagnostics)
     (define-key map (kbd "C-c n c") #'nepali-clear-diagnostics)
     (define-key map (kbd "C-c n ?") #'nepali-varnavinyas-dispatch)
@@ -265,6 +268,95 @@ Returned diagnostics use absolute buffer line and column positions."
                                  explanation))
                  "  ")))
 
+(defun nepali--non-empty-string-p (value)
+  "Return non-nil when VALUE is a non-empty string."
+  (and (stringp value)
+       (not (string-empty-p value))))
+
+(defun nepali--hunspell-suggestions (word)
+  "Return Hunspell spelling suggestions for WORD."
+  (when (and (nepali--hunspell-available-p)
+             (nepali--non-empty-string-p word))
+    (nepali--ensure-dict)
+    (let ((output-buffer (generate-new-buffer " *nepali-hunspell-suggestions*")))
+      (unwind-protect
+          (with-temp-buffer
+            (insert word)
+            (insert "\n")
+            (call-process-region
+             (point-min) (point-max)
+             (nepali--hunspell-available-p)
+             nil output-buffer nil
+             "-d" (expand-file-name "ne_NP" nepali--dict-directory))
+            (with-current-buffer output-buffer
+              (let ((output (buffer-string))
+                    suggestions)
+                (dolist (line (split-string output "\n" t))
+                  (when (string-match "^& [^ ]+ [0-9]+ [0-9]+: \\(.*\\)$" line)
+                    (setq suggestions
+                          (append suggestions
+                                  (mapcar #'string-trim
+                                          (split-string (match-string 1 line) "," t))))))
+                (delete-dups suggestions))))
+        (kill-buffer output-buffer)))))
+
+(defun nepali--diagnostic-correction-candidates (diagnostic)
+  "Return correction candidates for DIAGNOSTIC.
+
+Varnavinyas correction is listed first, followed by Hunspell suggestions."
+  (let* ((incorrect (alist-get 'incorrect diagnostic))
+         (varnavinyas-correction (alist-get 'correction diagnostic))
+         (candidates (append (when (nepali--non-empty-string-p varnavinyas-correction)
+                               (list varnavinyas-correction))
+                             (nepali--hunspell-suggestions incorrect))))
+    (delete-dups (seq-filter #'nepali--non-empty-string-p candidates))))
+
+(defun nepali--read-correction (diagnostic)
+  "Read a correction choice for DIAGNOSTIC."
+  (let ((candidates (nepali--diagnostic-correction-candidates diagnostic)))
+    (cond
+     ((null candidates)
+      (user-error "No correction candidates for this diagnostic"))
+     ((cdr candidates)
+      (completing-read
+       (format "Replace %s with: " (alist-get 'incorrect diagnostic))
+       candidates nil nil nil nil (car candidates)))
+     (t
+      (car candidates)))))
+
+(defun nepali--overlay-at-point ()
+  "Return a Varnavinyas diagnostic overlay at point, or nil."
+  (or (seq-find (lambda (overlay)
+                  (overlay-get overlay 'nepali-varnavinyas-diagnostic))
+                (overlays-at (point)))
+      (seq-find (lambda (overlay)
+                  (overlay-get overlay 'nepali-varnavinyas-diagnostic))
+                (overlays-at (max (point-min) (1- (point)))))))
+
+(defun nepali--apply-correction-to-overlay (overlay correction)
+  "Apply CORRECTION to diagnostic OVERLAY."
+  (unless (overlay-buffer overlay)
+    (user-error "Diagnostic is no longer live"))
+  (let ((diagnostic (overlay-get overlay 'nepali-varnavinyas-diagnostic))
+        (beg (overlay-start overlay))
+        (end (overlay-end overlay)))
+    (goto-char beg)
+    (delete-region beg end)
+    (insert correction)
+    (delete-overlay overlay)
+    (setq nepali-varnavinyas--overlays
+          (delq overlay nepali-varnavinyas--overlays))
+    (setq nepali-varnavinyas--diagnostics
+          (delq diagnostic nepali-varnavinyas--diagnostics))
+    correction))
+
+(defun nepali--safe-autofix-overlay-p (overlay)
+  "Return non-nil if OVERLAY can be fixed by bulk correction."
+  (let ((diagnostic (overlay-get overlay 'nepali-varnavinyas-diagnostic)))
+    (and diagnostic
+         (string= (or (alist-get 'kind diagnostic) "") "Error")
+         (nepali--non-empty-string-p (alist-get 'correction diagnostic)))))
+
 (defun nepali--buffer-position (line column)
   "Return buffer position for 1-based LINE and COLUMN."
   (save-excursion
@@ -363,6 +455,21 @@ Returned diagnostics use absolute buffer line and column positions."
       (user-error "Source buffer is no longer live"))
     (pop-to-buffer source-buffer)
     (nepali--goto-varnavinyas-diagnostic diagnostic)))
+
+(defun nepali-varnavinyas-summary-apply-correction ()
+  "Apply a correction for the summary diagnostic at point."
+  (interactive)
+  (let ((diagnostic (or (get-text-property (point) 'nepali-varnavinyas-diagnostic)
+                        (get-text-property (line-beginning-position)
+                                           'nepali-varnavinyas-diagnostic)))
+        (source-buffer nepali-varnavinyas--last-source-buffer))
+    (unless diagnostic
+      (user-error "No diagnostic on this line"))
+    (unless (buffer-live-p source-buffer)
+      (user-error "Source buffer is no longer live"))
+    (pop-to-buffer source-buffer)
+    (nepali--goto-varnavinyas-diagnostic diagnostic)
+    (nepali-varnavinyas-apply-correction-at-point)))
 
 (define-derived-mode nepali-varnavinyas-summary-mode special-mode
   "Nepali-Varnavinyas"
@@ -484,13 +591,49 @@ Returned diagnostics use absolute buffer line and column positions."
 (defun nepali-varnavinyas-diagnostic-at-point ()
   "Show the Varnavinyas diagnostic at point."
   (interactive)
-  (let ((diagnostic (or (get-char-property (point) 'nepali-varnavinyas-diagnostic)
-                        (get-char-property (max (point-min) (1- (point)))
-                                           'nepali-varnavinyas-diagnostic))))
+  (let* ((overlay (nepali--overlay-at-point))
+         (diagnostic (and overlay
+                          (overlay-get overlay 'nepali-varnavinyas-diagnostic))))
     (unless diagnostic
       (user-error "No Varnavinyas diagnostic at point"))
     (message "%s" (nepali--diagnostic-message diagnostic))
     diagnostic))
+
+;;;###autoload
+(defun nepali-varnavinyas-apply-correction-at-point ()
+  "Apply a correction for the Varnavinyas diagnostic at point.
+
+When multiple candidates are available, prompt with completion.  The
+Varnavinyas correction is the default, followed by Hunspell suggestions."
+  (interactive)
+  (let* ((overlay (nepali--overlay-at-point))
+         (diagnostic (and overlay
+                          (overlay-get overlay 'nepali-varnavinyas-diagnostic))))
+    (unless diagnostic
+      (user-error "No Varnavinyas diagnostic at point"))
+    (let ((correction (nepali--read-correction diagnostic)))
+      (nepali--apply-correction-to-overlay overlay correction)
+      (message "Applied correction: %s" correction))))
+
+;;;###autoload
+(defun nepali-varnavinyas-apply-all-corrections ()
+  "Apply all safe Varnavinyas corrections in the current buffer.
+
+This applies only non-ambiguous error diagnostics that have a direct
+Varnavinyas correction.  Diagnostics are processed from the end of the buffer
+to the beginning."
+  (interactive)
+  (let ((overlays (seq-filter #'nepali--safe-autofix-overlay-p
+                              (nepali--sorted-varnavinyas-overlays))))
+    (unless overlays
+      (user-error "No safe corrections to apply"))
+    (when (yes-or-no-p (format "Apply %d Varnavinyas corrections? "
+                               (length overlays)))
+      (dolist (overlay (reverse overlays))
+        (let* ((diagnostic (overlay-get overlay 'nepali-varnavinyas-diagnostic))
+               (correction (alist-get 'correction diagnostic)))
+          (nepali--apply-correction-to-overlay overlay correction)))
+      (message "Applied %d corrections." (length overlays)))))
 
 (defun nepali-varnavinyas-toggle-grammar ()
   "Toggle Varnavinyas grammar/samasa heuristics."
@@ -541,6 +684,9 @@ Returned diagnostics use absolute buffer line and column positions."
       ("d" "at point" nepali-varnavinyas-diagnostic-at-point :transient t)
       ("l" "list" nepali-show-diagnostics :transient t)
       ("c" "clear" nepali-clear-diagnostics :transient t)]
+     ["Fix"
+      ("a" "apply at point" nepali-varnavinyas-apply-correction-at-point :transient t)
+      ("A" "apply all safe" nepali-varnavinyas-apply-all-corrections :transient t)]
      ["Modes"
       ("m" "varnavinyas mode" nepali-varnavinyas-mode :transient t)
       ("f" "flymake" nepali-varnavinyas-flymake-mode :transient t)]
