@@ -35,6 +35,7 @@
 (require 'json)
 (require 'seq)
 (require 'subr-x)
+(require 'transient nil t)
 
 (defgroup nepali nil
   "Nepali spellcheck."
@@ -87,6 +88,7 @@ diagnostics."
     (define-key map (kbd "C-c n d") #'nepali-varnavinyas-diagnostic-at-point)
     (define-key map (kbd "C-c n l") #'nepali-show-diagnostics)
     (define-key map (kbd "C-c n c") #'nepali-clear-diagnostics)
+    (define-key map (kbd "C-c n ?") #'nepali-varnavinyas-dispatch)
     map)
   "Keymap for `nepali-varnavinyas-mode'.")
 
@@ -446,6 +448,64 @@ Returned diagnostics use absolute buffer line and column positions."
       (user-error "No Varnavinyas diagnostic at point"))
     (message "%s" (nepali--diagnostic-message diagnostic))
     diagnostic))
+
+(defun nepali-varnavinyas-toggle-grammar ()
+  "Toggle Varnavinyas grammar/samasa heuristics."
+  (interactive)
+  (setq nepali-varnavinyas-enable-grammar
+        (not nepali-varnavinyas-enable-grammar))
+  (message "Varnavinyas grammar heuristics %s"
+           (if nepali-varnavinyas-enable-grammar "enabled" "disabled")))
+
+(defun nepali-varnavinyas-set-backend ()
+  "Set `nepali-backend' to Varnavinyas."
+  (interactive)
+  (setq nepali-backend 'varnavinyas)
+  (message "Nepali backend: varnavinyas"))
+
+(defun nepali-hunspell-set-backend ()
+  "Set `nepali-backend' to Hunspell."
+  (interactive)
+  (setq nepali-backend 'hunspell)
+  (message "Nepali backend: hunspell"))
+
+(defun nepali-varnavinyas-status ()
+  "Show Varnavinyas integration status."
+  (interactive)
+  (message "backend=%s grammar=%s program=%s diagnostics=%d"
+           nepali-backend
+           (if nepali-varnavinyas-enable-grammar "on" "off")
+           (or (nepali--varnavinyas-available-p) "not found")
+           (length nepali-varnavinyas--diagnostics)))
+
+(defun nepali-varnavinyas-dispatch ()
+  "Open the Varnavinyas dispatcher."
+  (interactive)
+  (if (fboundp 'nepali-varnavinyas--dispatch)
+      (nepali-varnavinyas--dispatch)
+    (user-error "The transient package is not available.  Use `nepali-varnavinyas-mode' key bindings or install transient")))
+
+(when (featurep 'transient)
+  (transient-define-prefix nepali-varnavinyas--dispatch ()
+    "Dispatch Varnavinyas commands."
+    [["Check"
+      ("w" "word" nepali-varnavinyas-check-word)
+      ("r" "region" nepali-varnavinyas-check-region)
+      ("b" "buffer" nepali-varnavinyas-check-buffer)]
+     ["Diagnostics"
+      ("n" "next" nepali-varnavinyas-next-diagnostic)
+      ("p" "previous" nepali-varnavinyas-previous-diagnostic)
+      ("d" "at point" nepali-varnavinyas-diagnostic-at-point)
+      ("l" "list" nepali-show-diagnostics)
+      ("c" "clear" nepali-clear-diagnostics)]
+     ["Modes"
+      ("m" "varnavinyas mode" nepali-varnavinyas-mode)
+      ("f" "flymake" nepali-varnavinyas-flymake-mode)]
+     ["Options"
+      ("g" "toggle grammar" nepali-varnavinyas-toggle-grammar)
+      ("v" "backend: varnavinyas" nepali-varnavinyas-set-backend)
+      ("h" "backend: hunspell" nepali-hunspell-set-backend)
+      ("s" "status" nepali-varnavinyas-status)]]))
 
 (defun nepali--flymake-type (diagnostic)
   "Return a Flymake type for a varnavinyas DIAGNOSTIC."

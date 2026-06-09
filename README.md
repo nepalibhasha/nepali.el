@@ -76,6 +76,7 @@ Then run:
 | Command | Description |
 |---|---|
 | `M-x nepali-varnavinyas-mode` | Enable Varnavinyas key bindings for the current buffer |
+| `M-x nepali-varnavinyas-dispatch` | Open the optional Transient command menu |
 | `M-x nepali-check-word` | Check the Devanagari word at point |
 | `M-x nepali-check-region` | Check selected text |
 | `M-x nepali-check-buffer` | Check the current buffer |
@@ -98,6 +99,7 @@ When `nepali-varnavinyas-mode` is enabled:
 
 | Key | Command |
 |---|---|
+| `C-c n ?` | Open the Varnavinyas command menu |
 | `C-c n w` | Check word at point |
 | `C-c n r` | Check selected region |
 | `C-c n b` | Check buffer |
@@ -106,6 +108,8 @@ When `nepali-varnavinyas-mode` is enabled:
 | `C-c n d` | Show diagnostic at point |
 | `C-c n l` | List current diagnostics |
 | `C-c n c` | Clear diagnostics |
+
+The command menu uses `transient` when available, following the same interaction style as Magit. If `transient` is not installed, all direct commands and key bindings still work.
 
 Optional grammar/samasa heuristics can be enabled with:
 
