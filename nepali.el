@@ -12,6 +12,8 @@
 ;;
 ;; This package ships a Hunspell dictionary (ne_NP) compiled by
 ;; Madan Puraskar Pustakalaya and configures flyspell to use it.
+;; It can also call the external varnavinyas checker as an optional
+;; diagnostics backend.
 ;;
 ;; Prerequisites:
 ;;   hunspell must be installed on your system:
@@ -30,11 +32,63 @@
 
 (require 'ispell)
 (require 'flyspell)
+(require 'json)
+(require 'seq)
+(require 'subr-x)
 
 (defgroup nepali nil
-  "Nepali spellcheck using hunspell."
+  "Nepali spellcheck."
   :group 'ispell
   :prefix "nepali-")
+
+(defcustom nepali-backend 'hunspell
+  "Backend used by `nepali-check-buffer'.
+
+`hunspell' uses the bundled ne_NP dictionary through ispell/flyspell.
+`varnavinyas' calls the external varnavinyas CLI and shows rule-backed
+diagnostics."
+  :type '(choice (const :tag "Hunspell" hunspell)
+                 (const :tag "Varnavinyas" varnavinyas))
+  :group 'nepali)
+
+(defcustom nepali-varnavinyas-program "varnavinyas"
+  "Program name or path for the varnavinyas CLI."
+  :type 'string
+  :group 'nepali)
+
+(defcustom nepali-varnavinyas-enable-grammar nil
+  "Whether to pass --grammar to varnavinyas checks."
+  :type 'boolean
+  :group 'nepali)
+
+(defface nepali-varnavinyas-error-face
+  '((t (:underline (:style wave :color "red"))))
+  "Face used for Varnavinyas error diagnostics."
+  :group 'nepali)
+
+(defface nepali-varnavinyas-warning-face
+  '((t (:underline (:style wave :color "orange"))))
+  "Face used for Varnavinyas non-error diagnostics."
+  :group 'nepali)
+
+(defvar-local nepali-varnavinyas--diagnostics nil
+  "Current Varnavinyas diagnostics for this buffer.")
+
+(defvar-local nepali-varnavinyas--overlays nil
+  "Current Varnavinyas diagnostic overlays for this buffer.")
+
+(defvar nepali-varnavinyas-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c n w") #'nepali-varnavinyas-check-word)
+    (define-key map (kbd "C-c n r") #'nepali-varnavinyas-check-region)
+    (define-key map (kbd "C-c n b") #'nepali-varnavinyas-check-buffer)
+    (define-key map (kbd "C-c n n") #'nepali-varnavinyas-next-diagnostic)
+    (define-key map (kbd "C-c n p") #'nepali-varnavinyas-previous-diagnostic)
+    (define-key map (kbd "C-c n d") #'nepali-varnavinyas-diagnostic-at-point)
+    (define-key map (kbd "C-c n l") #'nepali-show-diagnostics)
+    (define-key map (kbd "C-c n c") #'nepali-clear-diagnostics)
+    map)
+  "Keymap for `nepali-varnavinyas-mode'.")
 
 (defvar nepali--directory
   (file-name-directory (or load-file-name buffer-file-name))
@@ -91,19 +145,454 @@
                  nil
                  utf-8))))
 
+(defun nepali--varnavinyas-available-p ()
+  "Return path to varnavinyas if available, nil otherwise."
+  (seq-find #'file-executable-p
+            (delq nil
+                  (list
+                   (executable-find nepali-varnavinyas-program)
+                   (when (string-match-p "/" nepali-varnavinyas-program)
+                     (expand-file-name nepali-varnavinyas-program))
+                   (expand-file-name "../varnavinyas/target/release/varnavinyas"
+                                     nepali--directory)
+                   (expand-file-name "../varnavinyas/target/debug/varnavinyas"
+                                     nepali--directory)))))
+
+(defun nepali--varnavinyas-command ()
+  "Return the resolved varnavinyas command path."
+  (or (nepali--varnavinyas-available-p)
+      nepali-varnavinyas-program))
+
+(defun nepali--ensure-varnavinyas ()
+  "Signal an error if varnavinyas is not installed."
+  (unless (nepali--varnavinyas-available-p)
+    (user-error
+     "nepali.el requires varnavinyas for this backend.  Set `nepali-varnavinyas-program' to the CLI path, or put varnavinyas on `exec-path'.  Tried: %s"
+     (string-join
+      (delq nil
+            (list nepali-varnavinyas-program
+                  (expand-file-name "../varnavinyas/target/release/varnavinyas"
+                                    nepali--directory)
+                  (expand-file-name "../varnavinyas/target/debug/varnavinyas"
+                                    nepali--directory)))
+      ", "))))
+
+(defun nepali--varnavinyas-args ()
+  "Return command arguments for varnavinyas JSON diagnostics."
+  (append '("check" "-" "--format" "json")
+          (when nepali-varnavinyas-enable-grammar '("--grammar"))))
+
+(defun nepali--json-read-diagnostics (json)
+  "Read varnavinyas diagnostics from JSON."
+  (let ((json-array-type 'list)
+        (json-object-type 'alist)
+        (json-key-type 'symbol))
+    (if (string-empty-p (string-trim json))
+        nil
+      (json-read-from-string json))))
+
+(defun nepali--run-varnavinyas (text)
+  "Run varnavinyas on TEXT and return parsed diagnostics."
+  (nepali--ensure-varnavinyas)
+  (let ((output-buffer (generate-new-buffer " *nepali-varnavinyas-output*")))
+    (unwind-protect
+        (let ((exit-code (with-temp-buffer
+                           (insert text)
+                           (apply #'call-process-region
+                                  (point-min) (point-max)
+                                  (nepali--varnavinyas-command)
+                                  nil output-buffer nil
+                                  (nepali--varnavinyas-args)))))
+          (with-current-buffer output-buffer
+            (let ((output (buffer-string)))
+              (unless (memq exit-code '(0 1))
+                (user-error "varnavinyas failed with exit code %s: %s"
+                            exit-code (string-trim output)))
+              (nepali--json-read-diagnostics output))))
+      (kill-buffer output-buffer))))
+
+(defun nepali--offset-diagnostic (diagnostic line-offset column-offset)
+  "Return DIAGNOSTIC shifted by LINE-OFFSET and COLUMN-OFFSET."
+  (let ((copy (copy-tree diagnostic)))
+    (setf (alist-get 'line copy)
+          (+ (or (alist-get 'line diagnostic) 1) line-offset))
+    (when (= (or (alist-get 'line diagnostic) 1) 1)
+      (setf (alist-get 'column copy)
+            (+ (or (alist-get 'column diagnostic) 1) column-offset)))
+    copy))
+
+(defun nepali--run-varnavinyas-region (beg end)
+  "Run varnavinyas on region from BEG to END.
+
+Returned diagnostics use absolute buffer line and column positions."
+  (let* ((start-line (line-number-at-pos beg))
+         (start-column (save-excursion
+                         (goto-char beg)
+                         (1+ (current-column))))
+         (line-offset (1- start-line))
+         (column-offset (1- start-column))
+         (text (buffer-substring-no-properties beg end)))
+    (mapcar (lambda (diagnostic)
+              (nepali--offset-diagnostic diagnostic line-offset column-offset))
+            (nepali--run-varnavinyas text))))
+
+(defun nepali--diagnostic-message (diagnostic)
+  "Return a display message for a varnavinyas DIAGNOSTIC."
+  (let ((correction (alist-get 'correction diagnostic))
+        (category (alist-get 'category diagnostic))
+        (explanation (alist-get 'explanation diagnostic)))
+    (string-join (delq nil (list (when (and correction
+                                            (not (string-empty-p correction)))
+                                   (format "-> %s" correction))
+                                 category
+                                 explanation))
+                 "  ")))
+
+(defun nepali--buffer-position (line column)
+  "Return buffer position for 1-based LINE and COLUMN."
+  (save-excursion
+    (goto-char (point-min))
+    (forward-line (max 0 (1- line)))
+    (forward-char (max 0 (1- column)))
+    (point)))
+
+(defun nepali--diagnostic-bounds (diagnostic)
+  "Return buffer bounds for a varnavinyas DIAGNOSTIC."
+  (let* ((line (or (alist-get 'line diagnostic) 1))
+         (column (or (alist-get 'column diagnostic) 1))
+         (incorrect (or (alist-get 'incorrect diagnostic) ""))
+         (beg (nepali--buffer-position line column))
+         (end (save-excursion
+                (goto-char beg)
+                (min (point-max)
+                     (+ beg (length incorrect))))))
+    (cons beg (max beg end))))
+
+(defun nepali--diagnostic-face (diagnostic)
+  "Return overlay face for DIAGNOSTIC."
+  (pcase (alist-get 'kind diagnostic)
+    ("Error" 'nepali-varnavinyas-error-face)
+    (_ 'nepali-varnavinyas-warning-face)))
+
+(defun nepali--clear-varnavinyas-overlays ()
+  "Delete Varnavinyas overlays in the current buffer."
+  (mapc #'delete-overlay nepali-varnavinyas--overlays)
+  (setq nepali-varnavinyas--overlays nil))
+
+;;;###autoload
+(defun nepali-clear-diagnostics ()
+  "Clear Varnavinyas diagnostics and overlays in the current buffer."
+  (interactive)
+  (setq nepali-varnavinyas--diagnostics nil)
+  (nepali--clear-varnavinyas-overlays)
+  (message "Cleared Nepali diagnostics."))
+
+(defun nepali--make-varnavinyas-overlay (diagnostic)
+  "Create and return an overlay for DIAGNOSTIC."
+  (let* ((bounds (nepali--diagnostic-bounds diagnostic))
+         (beg (car bounds))
+         (end (cdr bounds))
+         (overlay (make-overlay beg end nil t nil)))
+    (overlay-put overlay 'face (nepali--diagnostic-face diagnostic))
+    (overlay-put overlay 'help-echo (nepali--diagnostic-message diagnostic))
+    (overlay-put overlay 'nepali-varnavinyas-diagnostic diagnostic)
+    overlay))
+
+(defun nepali--store-varnavinyas-diagnostics (diagnostics)
+  "Store DIAGNOSTICS and refresh overlays in the current buffer."
+  (setq nepali-varnavinyas--diagnostics diagnostics)
+  (nepali--clear-varnavinyas-overlays)
+  (setq nepali-varnavinyas--overlays
+        (mapcar #'nepali--make-varnavinyas-overlay diagnostics))
+  diagnostics)
+
+(defun nepali--show-varnavinyas-diagnostics (diagnostics)
+  "Show Varnavinyas DIAGNOSTICS in a summary buffer."
+  (let ((source (or (buffer-file-name) (buffer-name)))
+        (summary (get-buffer-create "*Nepali Varnavinyas*")))
+    (with-current-buffer summary
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (format "Varnavinyas diagnostics for %s\n\n" source))
+        (if diagnostics
+            (dolist (diagnostic diagnostics)
+              (let ((line (alist-get 'line diagnostic))
+                    (column (alist-get 'column diagnostic))
+                    (incorrect (alist-get 'incorrect diagnostic))
+                    (correction (alist-get 'correction diagnostic))
+                    (kind (alist-get 'kind diagnostic)))
+                (insert (format "%s:%s:%s: [%s] %s -> %s\n"
+                                source line column kind incorrect correction))
+                (insert (format "  %s\n\n"
+                                (nepali--diagnostic-message diagnostic)))))
+          (insert "No diagnostics.\n"))
+        (goto-char (point-min))
+        (view-mode 1)))
+    (display-buffer summary)))
+
+;;;###autoload
+(defun nepali-show-diagnostics ()
+  "Show current Varnavinyas diagnostics for this buffer."
+  (interactive)
+  (nepali--show-varnavinyas-diagnostics nepali-varnavinyas--diagnostics))
+
+(defun nepali--check-buffer-varnavinyas ()
+  "Check the current buffer using varnavinyas."
+  (interactive)
+  (let ((diagnostics (nepali--run-varnavinyas
+                      (buffer-substring-no-properties (point-min) (point-max)))))
+    (nepali--store-varnavinyas-diagnostics diagnostics)
+    (nepali--show-varnavinyas-diagnostics diagnostics)
+    (when diagnostics
+      (let ((bounds (nepali--diagnostic-bounds (car diagnostics))))
+        (goto-char (car bounds))))
+    diagnostics))
+
+(defun nepali--check-region-varnavinyas (beg end)
+  "Check region from BEG to END with varnavinyas."
+  (let ((diagnostics (nepali--run-varnavinyas-region beg end)))
+    (nepali--store-varnavinyas-diagnostics diagnostics)
+    (nepali--show-varnavinyas-diagnostics diagnostics)
+    (when diagnostics
+      (let ((bounds (nepali--diagnostic-bounds (car diagnostics))))
+        (goto-char (car bounds))))
+    diagnostics))
+
+(defun nepali--word-at-point ()
+  "Return the Devanagari word at point, or nil."
+  (save-excursion
+    (skip-chars-backward "ऀ-ॿ")
+    (let ((beg (point)))
+      (skip-chars-forward "ऀ-ॿ")
+      (unless (= beg (point))
+        (buffer-substring-no-properties beg (point))))))
+
+(defun nepali--word-bounds-at-point ()
+  "Return bounds of the Devanagari word at point, or nil."
+  (save-excursion
+    (skip-chars-backward "ऀ-ॿ")
+    (let ((beg (point)))
+      (skip-chars-forward "ऀ-ॿ")
+      (unless (= beg (point))
+        (cons beg (point))))))
+
+(defun nepali--check-word-varnavinyas ()
+  "Check the Devanagari word at point with varnavinyas."
+  (let ((bounds (nepali--word-bounds-at-point)))
+    (unless bounds
+      (user-error "No Devanagari word at point"))
+    (let ((diagnostics (nepali--run-varnavinyas-region (car bounds) (cdr bounds))))
+      (nepali--store-varnavinyas-diagnostics diagnostics)
+      (if diagnostics
+          (message "%s" (nepali--diagnostic-message (car diagnostics)))
+        (message "No Varnavinyas diagnostics for word."))
+      diagnostics)))
+
+(defun nepali--diagnostic-start (diagnostic)
+  "Return start position for DIAGNOSTIC."
+  (car (nepali--diagnostic-bounds diagnostic)))
+
+(defun nepali--sorted-varnavinyas-diagnostics ()
+  "Return current diagnostics sorted by buffer position."
+  (sort (copy-sequence nepali-varnavinyas--diagnostics)
+        (lambda (a b)
+          (< (nepali--diagnostic-start a)
+             (nepali--diagnostic-start b)))))
+
+(defun nepali--goto-varnavinyas-diagnostic (diagnostic)
+  "Move point to DIAGNOSTIC and display its message."
+  (let ((bounds (nepali--diagnostic-bounds diagnostic)))
+    (goto-char (car bounds))
+    (message "%s" (nepali--diagnostic-message diagnostic))))
+
+;;;###autoload
+(defun nepali-varnavinyas-next-diagnostic ()
+  "Move to the next Varnavinyas diagnostic."
+  (interactive)
+  (let* ((diagnostics (nepali--sorted-varnavinyas-diagnostics))
+         (pos (point))
+         (next (seq-find (lambda (diagnostic)
+                           (> (nepali--diagnostic-start diagnostic) pos))
+                         diagnostics)))
+    (unless next
+      (setq next (car diagnostics)))
+    (unless next
+      (user-error "No Varnavinyas diagnostics.  Run `nepali-varnavinyas-check-buffer' first"))
+    (nepali--goto-varnavinyas-diagnostic next)))
+
+;;;###autoload
+(defun nepali-varnavinyas-previous-diagnostic ()
+  "Move to the previous Varnavinyas diagnostic."
+  (interactive)
+  (let* ((diagnostics (reverse (nepali--sorted-varnavinyas-diagnostics)))
+         (pos (point))
+         (previous (seq-find (lambda (diagnostic)
+                               (< (nepali--diagnostic-start diagnostic) pos))
+                             diagnostics)))
+    (unless previous
+      (setq previous (car diagnostics)))
+    (unless previous
+      (user-error "No Varnavinyas diagnostics.  Run `nepali-varnavinyas-check-buffer' first"))
+    (nepali--goto-varnavinyas-diagnostic previous)))
+
+;;;###autoload
+(defun nepali-varnavinyas-diagnostic-at-point ()
+  "Show the Varnavinyas diagnostic at point."
+  (interactive)
+  (let ((diagnostic (or (get-char-property (point) 'nepali-varnavinyas-diagnostic)
+                        (get-char-property (max (point-min) (1- (point)))
+                                           'nepali-varnavinyas-diagnostic))))
+    (unless diagnostic
+      (user-error "No Varnavinyas diagnostic at point"))
+    (message "%s" (nepali--diagnostic-message diagnostic))
+    diagnostic))
+
+(defun nepali--flymake-type (diagnostic)
+  "Return a Flymake type for a varnavinyas DIAGNOSTIC."
+  (pcase (alist-get 'kind diagnostic)
+    ("Error" :error)
+    (_ :warning)))
+
+(defun nepali--flymake-diagnostic (source diagnostic)
+  "Convert a varnavinyas DIAGNOSTIC to a Flymake diagnostic for SOURCE."
+  (let* ((bounds (nepali--diagnostic-bounds diagnostic))
+         (beg (car bounds))
+         (end (cdr bounds)))
+    (flymake-make-diagnostic source beg end
+                             (nepali--flymake-type diagnostic)
+                             (nepali--diagnostic-message diagnostic))))
+
+(defun nepali--varnavinyas-flymake-sentinel (proc _event)
+  "Handle completion for a varnavinyas Flymake process PROC."
+  (when (memq (process-status proc) '(exit signal))
+    (let ((source (process-get proc 'nepali-source-buffer))
+          (report-fn (process-get proc 'nepali-report-fn))
+          (output-buffer (process-get proc 'nepali-output-buffer)))
+      (unwind-protect
+          (if (not (buffer-live-p source))
+              (funcall report-fn nil)
+            (with-current-buffer output-buffer
+              (let ((exit-code (process-exit-status proc))
+                    (output (buffer-string)))
+                (if (not (memq exit-code '(0 1)))
+                    (funcall report-fn nil
+                             :panic
+                             (format "varnavinyas failed with exit code %s: %s"
+                                     exit-code (string-trim output)))
+                  (with-current-buffer source
+                    (funcall report-fn
+                             (mapcar
+                              (lambda (diagnostic)
+                                (nepali--flymake-diagnostic source diagnostic))
+                              (nepali--json-read-diagnostics output))))))))
+        (when (buffer-live-p output-buffer)
+          (kill-buffer output-buffer))))))
+
+(defun nepali--varnavinyas-flymake-backend (report-fn &rest _args)
+  "Flymake backend that reports varnavinyas diagnostics through REPORT-FN."
+  (if (not (fboundp 'flymake-make-diagnostic))
+      (funcall report-fn nil :panic "This Emacs does not provide modern Flymake diagnostics")
+    (nepali--ensure-varnavinyas)
+    (let ((source (current-buffer))
+          (output-buffer (generate-new-buffer " *nepali-varnavinyas-flymake-output*")))
+      (let ((process
+             (make-process
+              :name "nepali-varnavinyas"
+              :buffer output-buffer
+              :noquery t
+              :connection-type 'pipe
+              :command (cons (nepali--varnavinyas-command)
+                             (nepali--varnavinyas-args))
+              :sentinel #'nepali--varnavinyas-flymake-sentinel)))
+        (process-put process 'nepali-source-buffer source)
+        (process-put process 'nepali-report-fn report-fn)
+        (process-put process 'nepali-output-buffer output-buffer)
+        (process-send-region process (point-min) (point-max))
+        (process-send-eof process)))))
+
 ;;;###autoload
 (defun nepali-check-word ()
   "Check the Nepali word at point."
   (interactive)
-  (nepali--setup-ispell)
-  (ispell-word))
+  (pcase nepali-backend
+    ('hunspell
+     (nepali--setup-ispell)
+     (ispell-word))
+    ('varnavinyas
+     (nepali--check-word-varnavinyas))))
+
+;;;###autoload
+(defun nepali-varnavinyas-check-word ()
+  "Check the Devanagari word at point with Varnavinyas."
+  (interactive)
+  (nepali--check-word-varnavinyas))
 
 ;;;###autoload
 (defun nepali-check-buffer ()
-  "Spellcheck the entire buffer using the Nepali dictionary."
+  "Check the current buffer using `nepali-backend'."
   (interactive)
-  (nepali--setup-ispell)
-  (flyspell-buffer))
+  (pcase nepali-backend
+    ('hunspell
+     (nepali--setup-ispell)
+     (flyspell-buffer))
+    ('varnavinyas
+     (nepali--check-buffer-varnavinyas))))
+
+;;;###autoload
+(defun nepali-varnavinyas-check-buffer ()
+  "Check the current buffer with Varnavinyas."
+  (interactive)
+  (nepali--check-buffer-varnavinyas))
+
+;;;###autoload
+(defun nepali-check-region (beg end)
+  "Check selected Nepali text from BEG to END using `nepali-backend'."
+  (interactive "r")
+  (unless (or (not (called-interactively-p 'interactive))
+              (use-region-p))
+    (user-error "Select a region first"))
+  (pcase nepali-backend
+    ('hunspell
+     (nepali--setup-ispell)
+     (ispell-region beg end))
+    ('varnavinyas
+     (nepali--check-region-varnavinyas beg end))))
+
+;;;###autoload
+(defun nepali-varnavinyas-check-region (beg end)
+  "Check selected Nepali text from BEG to END with Varnavinyas."
+  (interactive "r")
+  (unless (or (not (called-interactively-p 'interactive))
+              (use-region-p))
+    (user-error "Select a region first"))
+  (nepali--check-region-varnavinyas beg end))
+
+;;;###autoload
+(define-minor-mode nepali-varnavinyas-mode
+  "Minor mode for Varnavinyas-powered Nepali diagnostics.
+
+Key bindings:
+\\{nepali-varnavinyas-mode-map}"
+  :lighter " वर्ण"
+  :keymap nepali-varnavinyas-mode-map
+  :group 'nepali
+  (when nepali-varnavinyas-mode
+    (nepali--ensure-varnavinyas)))
+
+;;;###autoload
+(define-minor-mode nepali-varnavinyas-flymake-mode
+  "Minor mode for Varnavinyas diagnostics through Flymake."
+  :lighter " वर्ण-fm"
+  :group 'nepali
+  (unless (require 'flymake nil t)
+    (user-error "Flymake is not available in this Emacs"))
+  (if nepali-varnavinyas-flymake-mode
+      (progn
+        (add-hook 'flymake-diagnostic-functions
+                  #'nepali--varnavinyas-flymake-backend nil t)
+        (flymake-mode 1))
+    (remove-hook 'flymake-diagnostic-functions
+                 #'nepali--varnavinyas-flymake-backend t)))
 
 ;;;###autoload
 (define-minor-mode nepali-flyspell-mode
