@@ -2,9 +2,9 @@
 
 Nepali spellcheck for Emacs using flyspell and hunspell.
 
-Ships a bundled [ne_NP Hunspell dictionary](http://nepalinux.org/downloads/ne_NP_dict.zip) (~36,800 words) compiled by Madan Puraskar Pustakalaya. The dictionary auto-extracts on first use.
+Ships a bundled [ne_NP Hunspell dictionary](http://nepalinux.org/downloads/ne_NP_dict.zip) compiled by Madan Puraskar Pustakalaya. The dictionary auto-extracts on first use.
 
-Experimental support is also available for [Varnavinyas](https://github.com/nepalibhasha/varnavinyas) rule-backed diagnostics through its CLI. Varnavinyas brings a larger headword/surface-form lexicon and a Rust diagnostic engine for spelling, orthography, punctuation, and writing-convention checks.
+Experimental support is also available for [Varnavinyas](https://github.com/nepalibhasha/varnavinyas) rule-backed diagnostics through its CLI. Varnavinyas uses its own larger Rust-backed headword/surface-form lexicon and diagnostic engine for spelling, orthography, punctuation, and writing-convention checks.
 
 ## Prerequisites
 
@@ -200,13 +200,15 @@ nepalibhasha/
 
 If the command menu is unavailable, install `transient` or use the direct `M-x nepali-varnavinyas-*` commands.
 
-## Dictionary
+## Dictionaries and engines
 
-The ne_NP dictionary (LGPL 2.1) includes:
+The bundled `ne_NP` Hunspell dictionary (LGPL 2.1) is used only by the Hunspell/flyspell workflow. It includes:
 
 - ~36,800 base Nepali words
 - 50 affix rule groups for suffix/prefix expansion (verb conjugations, case markers, plurals, etc.)
 - 24 common replacement pairs for suggestions (short/long vowel marks, sa/sha, anusvara/chandrabindu, etc.)
+
+The Varnavinyas workflow does not use the bundled Hunspell dictionary to identify spelling mistakes. It calls the external Varnavinyas engine, which uses its own larger headword/surface-form lexicon and rule-backed Rust diagnostics. Hunspell is used there only as an optional source of alternate correction suggestions when applying a single diagnostic.
 
 ## License
 
