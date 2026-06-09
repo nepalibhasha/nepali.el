@@ -47,6 +47,8 @@ Install hunspell:
 
 ## Usage
 
+### Hunspell spellcheck
+
 | Command | Description |
 |---|---|
 | `M-x nepali-flyspell-mode` | Toggle real-time Nepali spellcheck (shows `नेपाली` in modeline) |
@@ -59,7 +61,9 @@ By default, `nepali-check-buffer`, `nepali-check-word`, and `nepali-flyspell-mod
 
 The Varnavinyas workflow is optional and experimental. It does not force Varnavinyas into Hunspell/flyspell; it runs the external `varnavinyas` CLI and reports richer rule-backed diagnostics with overlays, navigation, and a jumpable summary buffer.
 
-Install or build the CLI, then configure:
+### Quick start
+
+Install or build the Varnavinyas CLI, then configure it if needed:
 
 ```elisp
 (setq nepali-varnavinyas-program "/path/to/varnavinyas")
@@ -67,37 +71,81 @@ Install or build the CLI, then configure:
 
 If this repository is checked out next to `../varnavinyas`, the local `target/release/varnavinyas` or `target/debug/varnavinyas` binary is auto-detected.
 
+Enable the Varnavinyas key bindings:
+
+```elisp
+(nepali-varnavinyas-mode 1)
+```
+
+Then use:
+
+| Key | Action |
+|---|---|
+| `C-c n ?` | Open the command menu |
+| `C-c n b` | Check the current buffer |
+| `C-c n n` | Move to the next diagnostic |
+| `C-c n a` | Apply a correction at point |
+
+With the command menu open, it stays open after actions, so a common flow is:
+
+```text
+C-c n ?   open menu
+b         check buffer
+n n n     move through diagnostics
+a         choose and apply a correction
+```
+
 To make the generic `nepali-check-*` commands use Varnavinyas:
 
 ```elisp
 (setq nepali-backend 'varnavinyas)
 ```
 
-Then run:
-
-| Command | Description |
-|---|---|
-| `M-x nepali-varnavinyas-mode` | Enable Varnavinyas key bindings for the current buffer |
-| `M-x nepali-varnavinyas-dispatch` | Open the optional Transient command menu |
-| `M-x nepali-check-word` | Check the Devanagari word at point |
-| `M-x nepali-check-region` | Check selected text |
-| `M-x nepali-check-buffer` | Check the current buffer |
-| `M-x nepali-show-diagnostics` | Reopen the latest diagnostics summary |
-| `M-x nepali-clear-diagnostics` | Clear Varnavinyas overlays and stored diagnostics |
-| `M-x nepali-varnavinyas-next-diagnostic` | Move to the next diagnostic |
-| `M-x nepali-varnavinyas-previous-diagnostic` | Move to the previous diagnostic |
-| `M-x nepali-varnavinyas-diagnostic-at-point` | Show the diagnostic message at point |
-| `M-x nepali-varnavinyas-apply-correction-at-point` | Choose and apply a correction at point |
-| `M-x nepali-varnavinyas-apply-all-corrections` | Apply all safe direct corrections |
-| `M-x nepali-varnavinyas-flymake-mode` | Show Varnavinyas diagnostics through Flymake |
-
-You can also call Varnavinyas-specific commands directly without changing `nepali-backend`:
+### Checking text
 
 | Command | Description |
 |---|---|
 | `M-x nepali-varnavinyas-check-word` | Check the Devanagari word at point |
 | `M-x nepali-varnavinyas-check-region` | Check selected text |
 | `M-x nepali-varnavinyas-check-buffer` | Check the current buffer |
+| `M-x nepali-varnavinyas-flymake-mode` | Show Varnavinyas diagnostics through Flymake |
+
+When `nepali-backend` is set to `varnavinyas`, these generic commands use the same checker:
+
+| Command | Description |
+|---|---|
+| `M-x nepali-check-word` | Check the Devanagari word at point |
+| `M-x nepali-check-region` | Check selected text |
+| `M-x nepali-check-buffer` | Check the current buffer |
+
+### Reviewing diagnostics
+
+| Command | Description |
+|---|---|
+| `M-x nepali-show-diagnostics` | Reopen the latest diagnostics summary |
+| `M-x nepali-clear-diagnostics` | Clear Varnavinyas overlays and stored diagnostics |
+| `M-x nepali-varnavinyas-next-diagnostic` | Move to the next diagnostic |
+| `M-x nepali-varnavinyas-previous-diagnostic` | Move to the previous diagnostic |
+| `M-x nepali-varnavinyas-diagnostic-at-point` | Show the diagnostic message at point |
+
+In the diagnostics summary buffer:
+
+| Key | Action |
+|---|---|
+| `RET` | Jump to the source location |
+| `a` | Apply a correction for that diagnostic |
+| `q` | Quit the summary window |
+
+### Applying corrections
+
+| Command | Description |
+|---|---|
+| `M-x nepali-varnavinyas-apply-correction-at-point` | Choose and apply a correction at point |
+| `M-x nepali-varnavinyas-apply-all-corrections` | Apply all safe direct corrections |
+
+Corrections use Varnavinyas as the diagnostic authority. If Hunspell is available, its suggestions are included as alternate choices when applying one diagnostic. Bulk correction applies only non-ambiguous Varnavinyas error diagnostics with direct corrections.
+
+### Key bindings
 
 When `nepali-varnavinyas-mode` is enabled:
 
@@ -115,17 +163,42 @@ When `nepali-varnavinyas-mode` is enabled:
 | `C-c n l` | List current diagnostics |
 | `C-c n c` | Clear diagnostics |
 
-The command menu uses `transient` when available, following the same interaction style as Magit. It stays open after actions, so you can check the buffer and then press `n` repeatedly to move through diagnostics. If `transient` is not installed, all direct commands and key bindings still work.
+### Command menu
 
-Corrections use Varnavinyas as the diagnostic authority. If Hunspell is available, its suggestions are included as alternate choices when applying one diagnostic. Bulk correction applies only non-ambiguous Varnavinyas error diagnostics with direct corrections.
+`M-x nepali-varnavinyas-dispatch` opens the optional Transient command menu. It follows the same interaction style as Magit and stays open after actions. If `transient` is not installed, all direct commands and key bindings still work.
 
-In the diagnostics summary buffer, press `RET` on a diagnostic line to jump back to the source location, or `a` to apply a correction.
+### Grammar heuristics
 
 Optional grammar/samasa heuristics can be enabled with:
 
 ```elisp
 (setq nepali-varnavinyas-enable-grammar t)
 ```
+
+### Troubleshooting
+
+If you see an error that Varnavinyas is required, either put `varnavinyas` on Emacs' `exec-path` or set:
+
+```elisp
+(setq nepali-varnavinyas-program "/absolute/path/to/varnavinyas")
+```
+
+In a sibling checkout layout like:
+
+```text
+nepalibhasha/
+  nepali.el/
+  varnavinyas/
+```
+
+`nepali.el` automatically checks:
+
+```text
+../varnavinyas/target/release/varnavinyas
+../varnavinyas/target/debug/varnavinyas
+```
+
+If the command menu is unavailable, install `transient` or use the direct `M-x nepali-varnavinyas-*` commands.
 
 ## Dictionary
 
