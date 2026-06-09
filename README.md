@@ -57,13 +57,15 @@ By default, `nepali-check-buffer`, `nepali-check-word`, and `nepali-flyspell-mod
 
 ## Varnavinyas workflow
 
-The Varnavinyas workflow is optional and experimental. It does not force Varnavinyas into Hunspell/flyspell; it runs the external `varnavinyas` CLI and reports richer rule-backed diagnostics with overlays, navigation, and a summary buffer.
+The Varnavinyas workflow is optional and experimental. It does not force Varnavinyas into Hunspell/flyspell; it runs the external `varnavinyas` CLI and reports richer rule-backed diagnostics with overlays, navigation, and a jumpable summary buffer.
 
 Install or build the CLI, then configure:
 
 ```elisp
 (setq nepali-varnavinyas-program "/path/to/varnavinyas")
 ```
+
+If this repository is checked out next to `../varnavinyas`, the local `target/release/varnavinyas` or `target/debug/varnavinyas` binary is auto-detected.
 
 To make the generic `nepali-check-*` commands use Varnavinyas:
 
@@ -110,6 +112,8 @@ When `nepali-varnavinyas-mode` is enabled:
 | `C-c n c` | Clear diagnostics |
 
 The command menu uses `transient` when available, following the same interaction style as Magit. It stays open after actions, so you can check the buffer and then press `n` repeatedly to move through diagnostics. If `transient` is not installed, all direct commands and key bindings still work.
+
+In the diagnostics summary buffer, press `RET` on a diagnostic line to jump back to the source location.
 
 Optional grammar/samasa heuristics can be enabled with:
 

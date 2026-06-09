@@ -78,6 +78,21 @@ diagnostics."
 (defvar-local nepali-varnavinyas--overlays nil
   "Current Varnavinyas diagnostic overlays for this buffer.")
 
+(defvar-local nepali-varnavinyas--flymake-process nil
+  "Current Varnavinyas Flymake process for this buffer.")
+
+(defvar-local nepali-varnavinyas--last-source-buffer nil
+  "Source buffer for the current Varnavinyas summary buffer.")
+
+(defvar nepali-varnavinyas-summary-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "RET") #'nepali-varnavinyas-summary-goto-diagnostic)
+    (define-key map (kbd "n") #'next-line)
+    (define-key map (kbd "p") #'previous-line)
+    (define-key map (kbd "q") #'quit-window)
+    map)
+  "Keymap for `nepali-varnavinyas-summary-mode'.")
+
 (defvar nepali-varnavinyas-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c n w") #'nepali-varnavinyas-check-word)
@@ -298,6 +313,7 @@ Returned diagnostics use absolute buffer line and column positions."
     (overlay-put overlay 'face (nepali--diagnostic-face diagnostic))
     (overlay-put overlay 'help-echo (nepali--diagnostic-message diagnostic))
     (overlay-put overlay 'nepali-varnavinyas-diagnostic diagnostic)
+    (overlay-put overlay 'evaporate t)
     overlay))
 
 (defun nepali--store-varnavinyas-diagnostics (diagnostics)
@@ -308,9 +324,54 @@ Returned diagnostics use absolute buffer line and column positions."
         (mapcar #'nepali--make-varnavinyas-overlay diagnostics))
   diagnostics)
 
+(defun nepali--sorted-varnavinyas-overlays ()
+  "Return live Varnavinyas overlays sorted by buffer position."
+  (sort (seq-filter #'overlay-buffer nepali-varnavinyas--overlays)
+        (lambda (a b)
+          (< (overlay-start a) (overlay-start b)))))
+
+(defun nepali--goto-varnavinyas-overlay (overlay)
+  "Move point to OVERLAY and display its diagnostic message."
+  (let ((diagnostic (overlay-get overlay 'nepali-varnavinyas-diagnostic)))
+    (goto-char (overlay-start overlay))
+    (message "%s" (nepali--diagnostic-message diagnostic))))
+
+(defun nepali--summary-insert-diagnostic (source diagnostic)
+  "Insert one summary line for DIAGNOSTIC from SOURCE."
+  (let ((line (alist-get 'line diagnostic))
+        (column (alist-get 'column diagnostic))
+        (incorrect (alist-get 'incorrect diagnostic))
+        (correction (alist-get 'correction diagnostic))
+        (kind (alist-get 'kind diagnostic))
+        (start (point)))
+    (insert (format "%s:%s:%s: [%s] %s -> %s\n"
+                    source line column kind incorrect correction))
+    (put-text-property start (point) 'nepali-varnavinyas-diagnostic diagnostic)
+    (insert (format "  %s\n\n"
+                    (nepali--diagnostic-message diagnostic)))))
+
+(defun nepali-varnavinyas-summary-goto-diagnostic ()
+  "Jump from the summary buffer to the diagnostic at point."
+  (interactive)
+  (let ((diagnostic (or (get-text-property (point) 'nepali-varnavinyas-diagnostic)
+                        (get-text-property (line-beginning-position)
+                                           'nepali-varnavinyas-diagnostic)))
+        (source-buffer nepali-varnavinyas--last-source-buffer))
+    (unless diagnostic
+      (user-error "No diagnostic on this line"))
+    (unless (buffer-live-p source-buffer)
+      (user-error "Source buffer is no longer live"))
+    (pop-to-buffer source-buffer)
+    (nepali--goto-varnavinyas-diagnostic diagnostic)))
+
+(define-derived-mode nepali-varnavinyas-summary-mode special-mode
+  "Nepali-Varnavinyas"
+  "Mode for Varnavinyas diagnostics summaries.")
+
 (defun nepali--show-varnavinyas-diagnostics (diagnostics)
   "Show Varnavinyas DIAGNOSTICS in a summary buffer."
-  (let ((source (or (buffer-file-name) (buffer-name)))
+  (let ((source-buffer (current-buffer))
+        (source (or (buffer-file-name) (buffer-name)))
         (summary (get-buffer-create "*Nepali Varnavinyas*")))
     (with-current-buffer summary
       (let ((inhibit-read-only t))
@@ -318,18 +379,11 @@ Returned diagnostics use absolute buffer line and column positions."
         (insert (format "Varnavinyas diagnostics for %s\n\n" source))
         (if diagnostics
             (dolist (diagnostic diagnostics)
-              (let ((line (alist-get 'line diagnostic))
-                    (column (alist-get 'column diagnostic))
-                    (incorrect (alist-get 'incorrect diagnostic))
-                    (correction (alist-get 'correction diagnostic))
-                    (kind (alist-get 'kind diagnostic)))
-                (insert (format "%s:%s:%s: [%s] %s -> %s\n"
-                                source line column kind incorrect correction))
-                (insert (format "  %s\n\n"
-                                (nepali--diagnostic-message diagnostic)))))
+              (nepali--summary-insert-diagnostic source diagnostic))
           (insert "No diagnostics.\n"))
         (goto-char (point-min))
-        (view-mode 1)))
+        (nepali-varnavinyas-summary-mode)
+        (setq-local nepali-varnavinyas--last-source-buffer source-buffer)))
     (display-buffer summary)))
 
 ;;;###autoload
@@ -390,17 +444,6 @@ Returned diagnostics use absolute buffer line and column positions."
         (message "No Varnavinyas diagnostics for word."))
       diagnostics)))
 
-(defun nepali--diagnostic-start (diagnostic)
-  "Return start position for DIAGNOSTIC."
-  (car (nepali--diagnostic-bounds diagnostic)))
-
-(defun nepali--sorted-varnavinyas-diagnostics ()
-  "Return current diagnostics sorted by buffer position."
-  (sort (copy-sequence nepali-varnavinyas--diagnostics)
-        (lambda (a b)
-          (< (nepali--diagnostic-start a)
-             (nepali--diagnostic-start b)))))
-
 (defun nepali--goto-varnavinyas-diagnostic (diagnostic)
   "Move point to DIAGNOSTIC and display its message."
   (let ((bounds (nepali--diagnostic-bounds diagnostic)))
@@ -411,31 +454,31 @@ Returned diagnostics use absolute buffer line and column positions."
 (defun nepali-varnavinyas-next-diagnostic ()
   "Move to the next Varnavinyas diagnostic."
   (interactive)
-  (let* ((diagnostics (nepali--sorted-varnavinyas-diagnostics))
+  (let* ((overlays (nepali--sorted-varnavinyas-overlays))
          (pos (point))
-         (next (seq-find (lambda (diagnostic)
-                           (> (nepali--diagnostic-start diagnostic) pos))
-                         diagnostics)))
+         (next (seq-find (lambda (overlay)
+                           (> (overlay-start overlay) pos))
+                         overlays)))
     (unless next
-      (setq next (car diagnostics)))
+      (setq next (car overlays)))
     (unless next
       (user-error "No Varnavinyas diagnostics.  Run `nepali-varnavinyas-check-buffer' first"))
-    (nepali--goto-varnavinyas-diagnostic next)))
+    (nepali--goto-varnavinyas-overlay next)))
 
 ;;;###autoload
 (defun nepali-varnavinyas-previous-diagnostic ()
   "Move to the previous Varnavinyas diagnostic."
   (interactive)
-  (let* ((diagnostics (reverse (nepali--sorted-varnavinyas-diagnostics)))
+  (let* ((overlays (reverse (nepali--sorted-varnavinyas-overlays)))
          (pos (point))
-         (previous (seq-find (lambda (diagnostic)
-                               (< (nepali--diagnostic-start diagnostic) pos))
-                             diagnostics)))
+         (previous (seq-find (lambda (overlay)
+                               (< (overlay-start overlay) pos))
+                             overlays)))
     (unless previous
-      (setq previous (car diagnostics)))
+      (setq previous (car overlays)))
     (unless previous
       (user-error "No Varnavinyas diagnostics.  Run `nepali-varnavinyas-check-buffer' first"))
-    (nepali--goto-varnavinyas-diagnostic previous)))
+    (nepali--goto-varnavinyas-overlay previous)))
 
 ;;;###autoload
 (defun nepali-varnavinyas-diagnostic-at-point ()
@@ -529,22 +572,24 @@ Returned diagnostics use absolute buffer line and column positions."
           (report-fn (process-get proc 'nepali-report-fn))
           (output-buffer (process-get proc 'nepali-output-buffer)))
       (unwind-protect
-          (if (not (buffer-live-p source))
-              (funcall report-fn nil)
-            (with-current-buffer output-buffer
-              (let ((exit-code (process-exit-status proc))
-                    (output (buffer-string)))
-                (if (not (memq exit-code '(0 1)))
-                    (funcall report-fn nil
-                             :panic
-                             (format "varnavinyas failed with exit code %s: %s"
-                                     exit-code (string-trim output)))
-                  (with-current-buffer source
-                    (funcall report-fn
-                             (mapcar
-                              (lambda (diagnostic)
-                                (nepali--flymake-diagnostic source diagnostic))
-                              (nepali--json-read-diagnostics output))))))))
+          (when (buffer-live-p source)
+            (with-current-buffer source
+              (when (eq proc nepali-varnavinyas--flymake-process)
+                (setq nepali-varnavinyas--flymake-process nil)
+                (with-current-buffer output-buffer
+                  (let ((exit-code (process-exit-status proc))
+                        (output (buffer-string)))
+                    (if (not (memq exit-code '(0 1)))
+                        (funcall report-fn nil
+                                 :panic
+                                 (format "varnavinyas failed with exit code %s: %s"
+                                         exit-code (string-trim output)))
+                      (with-current-buffer source
+                        (funcall report-fn
+                                 (mapcar
+                                  (lambda (diagnostic)
+                                    (nepali--flymake-diagnostic source diagnostic))
+                                  (nepali--json-read-diagnostics output))))))))))
         (when (buffer-live-p output-buffer)
           (kill-buffer output-buffer))))))
 
@@ -555,6 +600,8 @@ Returned diagnostics use absolute buffer line and column positions."
     (nepali--ensure-varnavinyas)
     (let ((source (current-buffer))
           (output-buffer (generate-new-buffer " *nepali-varnavinyas-flymake-output*")))
+      (when (process-live-p nepali-varnavinyas--flymake-process)
+        (kill-process nepali-varnavinyas--flymake-process))
       (let ((process
              (make-process
               :name "nepali-varnavinyas"
@@ -567,6 +614,7 @@ Returned diagnostics use absolute buffer line and column positions."
         (process-put process 'nepali-source-buffer source)
         (process-put process 'nepali-report-fn report-fn)
         (process-put process 'nepali-output-buffer output-buffer)
+        (setq nepali-varnavinyas--flymake-process process)
         (process-send-region process (point-min) (point-max))
         (process-send-eof process)))))
 
@@ -636,8 +684,9 @@ Key bindings:
   :lighter " वर्ण"
   :keymap nepali-varnavinyas-mode-map
   :group 'nepali
-  (when nepali-varnavinyas-mode
-    (nepali--ensure-varnavinyas)))
+  (when (and nepali-varnavinyas-mode
+             (not (nepali--varnavinyas-available-p)))
+    (message "Varnavinyas CLI not found.  Checks will prompt you to set `nepali-varnavinyas-program'.")))
 
 ;;;###autoload
 (define-minor-mode nepali-varnavinyas-flymake-mode
