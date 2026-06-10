@@ -134,6 +134,8 @@ When nil, nepali.el automatically downloads the pinned release asset into
     (define-key map (kbd "C-c n d") #'nepali-varnavinyas-diagnostic-at-point)
     (define-key map (kbd "C-c n a") #'nepali-varnavinyas-apply-correction-at-point)
     (define-key map (kbd "C-c n A") #'nepali-varnavinyas-apply-all-corrections)
+    (define-key map (kbd "C-c n i") #'nepali-varnavinyas-install)
+    (define-key map (kbd "C-c n R") #'nepali-varnavinyas-reinstall)
     (define-key map (kbd "C-c n l") #'nepali-show-diagnostics)
     (define-key map (kbd "C-c n c") #'nepali-clear-diagnostics)
     (define-key map (kbd "C-c n ?") #'nepali-varnavinyas-dispatch)
@@ -307,18 +309,22 @@ When nil, nepali.el automatically downloads the pinned release asset into
 (defun nepali--extract-archive (archive destination)
   "Extract ARCHIVE into DESTINATION."
   (make-directory destination t)
-  (let ((exit-code
-         (call-process
-          "tar" nil nil nil
-          (if (string-match-p "\\.zip\\'" archive) "-xf" "-xzf")
-          archive
-          "-C" destination)))
-    (unless (zerop exit-code)
-      (if (and (string-match-p "\\.zip\\'" archive)
-               (executable-find "unzip"))
-          (let ((zip-exit (call-process "unzip" nil nil nil "-o" archive "-d" destination)))
-            (unless (zerop zip-exit)
-              (user-error "Failed to extract Varnavinyas archive %s" archive)))
+  (if (string-match-p "\\.zip\\'" archive)
+      (cond
+       ((executable-find "unzip")
+        (let ((exit-code (call-process "unzip" nil nil nil "-o" archive "-d" destination)))
+          (unless (zerop exit-code)
+            (user-error "Failed to extract Varnavinyas archive %s" archive))))
+       ((executable-find "tar")
+        (let ((exit-code (call-process "tar" nil nil nil "-xf" archive "-C" destination)))
+          (unless (zerop exit-code)
+            (user-error "Failed to extract Varnavinyas archive %s" archive))))
+       (t
+        (user-error "Cannot extract %s. Install tar or unzip." archive)))
+    (unless (executable-find "tar")
+      (user-error "Cannot extract %s. Install tar." archive))
+    (let ((exit-code (call-process "tar" nil nil nil "-xzf" archive "-C" destination)))
+      (unless (zerop exit-code)
         (user-error "Failed to extract Varnavinyas archive %s" archive)))))
 
 (defun nepali--find-installed-varnavinyas (directory)
@@ -834,14 +840,47 @@ to the beginning."
   (setq nepali-backend 'hunspell)
   (message "Nepali backend: hunspell"))
 
+;;;###autoload
+(defun nepali-varnavinyas-install ()
+  "Install the pinned Varnavinyas CLI release into the local cache."
+  (interactive)
+  (let ((nepali-varnavinyas-program nil))
+    (message "Varnavinyas installed at %s"
+             (nepali--install-varnavinyas-release))))
+
+;;;###autoload
+(defun nepali-varnavinyas-reinstall ()
+  "Force reinstall the pinned Varnavinyas CLI release."
+  (interactive)
+  (let ((install-root (nepali--varnavinyas-install-root)))
+    (when (file-directory-p install-root)
+      (unless (yes-or-no-p (format "Delete and reinstall Varnavinyas %s? "
+                                   nepali-varnavinyas-release-tag))
+        (user-error "Reinstall canceled"))
+      (delete-directory install-root t))
+    (nepali-varnavinyas-install)))
+
+;;;###autoload
+(defun nepali-varnavinyas-clear-cache ()
+  "Delete all cached Varnavinyas release assets managed by nepali.el."
+  (interactive)
+  (let ((cache-dir (file-name-as-directory nepali-varnavinyas-cache-directory)))
+    (if (not (file-directory-p cache-dir))
+        (message "No Varnavinyas cache directory exists at %s" cache-dir)
+      (when (yes-or-no-p (format "Delete Varnavinyas cache at %s? " cache-dir))
+        (delete-directory cache-dir t)
+        (message "Deleted Varnavinyas cache at %s" cache-dir)))))
+
 (defun nepali-varnavinyas-status ()
   "Show Varnavinyas integration status."
   (interactive)
-  (message "backend=%s grammar=%s program=%s release=%s diagnostics=%d"
+  (message "backend=%s grammar=%s platform=%s program=%s release=%s cache=%s diagnostics=%d"
            nepali-backend
            (if nepali-varnavinyas-enable-grammar "on" "off")
+           (or (nepali--varnavinyas-platform-triplet) "unsupported")
            (or (nepali--varnavinyas-available-p) "not found")
            nepali-varnavinyas-release-tag
+           (file-name-as-directory nepali-varnavinyas-cache-directory)
            (length nepali-varnavinyas--diagnostics)))
 
 (defun nepali-varnavinyas-dispatch ()
@@ -867,6 +906,10 @@ to the beginning."
      ["Fix"
       ("a" "apply at point" nepali-varnavinyas-apply-correction-at-point :transient t)
       ("A" "apply all safe" nepali-varnavinyas-apply-all-corrections :transient t)]
+     ["CLI"
+      ("i" "install/update" nepali-varnavinyas-install :transient t)
+      ("R" "reinstall" nepali-varnavinyas-reinstall :transient t)
+      ("K" "clear cache" nepali-varnavinyas-clear-cache :transient t)]
      ["Modes"
       ("m" "varnavinyas mode" nepali-varnavinyas-mode :transient t)
       ("f" "flymake" nepali-varnavinyas-flymake-mode :transient t)]

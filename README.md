@@ -63,13 +63,21 @@ The Varnavinyas workflow is optional and experimental. It does not force Varnavi
 
 ### Quick start
 
-On first use, `nepali.el` downloads the pinned Varnavinyas CLI release from [GitHub Releases](https://github.com/nepalibhasha/varnavinyas/releases) into `user-emacs-directory` and reuses that cached binary later. If you want to use a different install, configure it explicitly:
+On first use, `nepali.el` downloads the pinned Varnavinyas CLI release from [GitHub Releases](https://github.com/nepalibhasha/varnavinyas/releases) into `user-emacs-directory` and reuses that cached binary later. No manual install step is required for the default path.
+
+The first check may take a few seconds while the release archive and checksum are downloaded, verified, and extracted.
+
+If you want to use a different install, configure it explicitly:
 
 ```elisp
 (setq nepali-varnavinyas-program "/path/to/varnavinyas")
 ```
 
 If `nepali-varnavinyas-program` is nil, `nepali.el` manages the release download automatically. If you set it, that path can be a release binary you downloaded, a system install, or any other executable you want to use.
+
+The pinned release tag is controlled by `nepali-varnavinyas-release-tag`. When the package updates that tag, the cached binary under `user-emacs-directory/nepali/varnavinyas/` is refreshed on first use.
+
+Automatic CLI installation currently supports the published Varnavinyas assets for macOS `aarch64`/`x86_64`, Linux `x86_64`, and Windows `x86_64`. Other platforms can use `nepali-varnavinyas-program` to point at a compatible local executable.
 
 Enable the Varnavinyas key bindings:
 
@@ -109,6 +117,9 @@ To make the generic `nepali-check-*` commands use Varnavinyas:
 | `M-x nepali-varnavinyas-check-region` | Check selected text |
 | `M-x nepali-varnavinyas-check-buffer` | Check the current buffer |
 | `M-x nepali-varnavinyas-flymake-mode` | Show Varnavinyas diagnostics through Flymake |
+| `M-x nepali-varnavinyas-install` | Download or reuse the pinned CLI release |
+| `M-x nepali-varnavinyas-reinstall` | Delete and reinstall the pinned CLI release |
+| `M-x nepali-varnavinyas-clear-cache` | Delete all Varnavinyas release assets cached by `nepali.el` |
 
 When `nepali-backend` is set to `varnavinyas`, these generic commands use the same checker:
 
@@ -160,6 +171,8 @@ When `nepali-varnavinyas-mode` is enabled:
 | `C-c n d` | Show diagnostic at point |
 | `C-c n a` | Choose and apply correction at point |
 | `C-c n A` | Apply all safe direct corrections |
+| `C-c n i` | Install or reuse the pinned Varnavinyas CLI |
+| `C-c n R` | Reinstall the pinned Varnavinyas CLI |
 | `C-c n l` | List current diagnostics |
 | `C-c n c` | Clear diagnostics |
 
@@ -183,7 +196,7 @@ If you see an error that Varnavinyas is required, either let `nepali.el` auto-do
 (setq nepali-varnavinyas-program "/absolute/path/to/varnavinyas")
 ```
 
-The pinned release tag is managed by `nepali-varnavinyas-release-tag`. If the package updates that tag, the cached binary in `user-emacs-directory` is replaced by the new release on first use.
+If a download is interrupted or the cached executable looks stale, run `M-x nepali-varnavinyas-reinstall`. To remove all managed release artifacts, run `M-x nepali-varnavinyas-clear-cache`.
 
 If the command menu is unavailable, install `transient` or use the direct `M-x nepali-varnavinyas-*` commands.
 
