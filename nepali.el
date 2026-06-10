@@ -32,6 +32,7 @@
 
 (require 'ispell)
 (require 'flyspell)
+(require 'cl-lib)
 (require 'json)
 (require 'seq)
 (require 'subr-x)
@@ -51,6 +52,21 @@
 diagnostics."
   :type '(choice (const :tag "Hunspell" hunspell)
                  (const :tag "Varnavinyas" varnavinyas))
+  :group 'nepali)
+
+(defcustom nepali-input-method "devanagari-itrans"
+  "Input method activated by Nepali writing modes.
+
+The default uses romanized ITRANS-style typing.  Users who prefer the
+standard InScript keyboard can set this to `devanagari-inscript'."
+  :type '(choice (const :tag "Devanagari ITRANS" "devanagari-itrans")
+                 (const :tag "Devanagari InScript" "devanagari-inscript")
+                 (string :tag "Other Emacs input method"))
+  :group 'nepali)
+
+(defcustom nepali-enable-input-method t
+  "Whether Nepali modes activate `nepali-input-method' on enable."
+  :type 'boolean
   :group 'nepali)
 
 (defcustom nepali-varnavinyas-program nil
@@ -124,6 +140,12 @@ explicit `nepali-varnavinyas-install'."
 (defvar-local nepali-varnavinyas--last-source-buffer nil
   "Source buffer for the current Varnavinyas summary buffer.")
 
+(defvar-local nepali--previous-input-method nil
+  "Input method that was active before nepali.el activated one.")
+
+(defvar-local nepali--input-method-owners nil
+  "Nepali minor modes that currently requested the input method.")
+
 (defconst nepali-varnavinyas--binary-name
   (if (eq system-type 'windows-nt) "varnavinyas.exe" "varnavinyas")
   "Filename of the installed Varnavinyas executable.")
@@ -150,6 +172,7 @@ explicit `nepali-varnavinyas-install'."
     (define-key map (kbd "C-c n A") #'nepali-varnavinyas-apply-all-corrections)
     (define-key map (kbd "C-c n i") #'nepali-varnavinyas-install)
     (define-key map (kbd "C-c n R") #'nepali-varnavinyas-reinstall)
+    (define-key map (kbd "C-c n \\") #'nepali-toggle-input-method)
     (define-key map (kbd "C-c n l") #'nepali-show-diagnostics)
     (define-key map (kbd "C-c n c") #'nepali-clear-diagnostics)
     (define-key map (kbd "C-c n ?") #'nepali-varnavinyas-dispatch)
@@ -163,6 +186,29 @@ explicit `nepali-varnavinyas-install'."
 (defvar nepali--zip-file
   (expand-file-name "ne_NP_dict.zip" nepali--directory)
   "Path to the bundled dictionary zip file.")
+
+(defun nepali--enable-input-method (owner)
+  "Activate `nepali-input-method' for OWNER in the current buffer."
+  (when nepali-enable-input-method
+    (unless nepali--input-method-owners
+      (setq-local nepali--previous-input-method current-input-method))
+    (cl-pushnew owner nepali--input-method-owners)
+    (setq-local default-input-method nepali-input-method)
+    (unless (equal current-input-method nepali-input-method)
+      (activate-input-method nepali-input-method))))
+
+(defun nepali--disable-input-method (owner)
+  "Release OWNER's request for the Nepali input method."
+  (setq nepali--input-method-owners
+        (delq owner nepali--input-method-owners))
+  (when (null nepali--input-method-owners)
+    (when (equal current-input-method nepali-input-method)
+      (if nepali--previous-input-method
+          (activate-input-method nepali--previous-input-method)
+        (deactivate-input-method)))
+    (setq nepali--previous-input-method nil)
+    (when (equal default-input-method nepali-input-method)
+      (kill-local-variable 'default-input-method))))
 
 (defun nepali--dict-directory ()
   "Return the directory containing extracted Hunspell dictionary files."
@@ -867,6 +913,17 @@ to the beginning."
   (message "Nepali backend: hunspell"))
 
 ;;;###autoload
+(defun nepali-toggle-input-method ()
+  "Toggle the configured Nepali Devanagari input method."
+  (interactive)
+  (setq-local default-input-method nepali-input-method)
+  (if (equal current-input-method nepali-input-method)
+      (deactivate-input-method)
+    (activate-input-method nepali-input-method))
+  (message "Nepali input method: %s"
+           (or current-input-method "off")))
+
+;;;###autoload
 (defun nepali-varnavinyas-install ()
   "Install the pinned Varnavinyas CLI release into the local cache."
   (interactive)
@@ -943,6 +1000,7 @@ to the beginning."
      ["Options"
       ("g" "toggle grammar" nepali-varnavinyas-toggle-grammar :transient t)
       ("I" "toggle auto-install" nepali-varnavinyas-toggle-auto-install :transient t)
+      ("\\" "toggle input method" nepali-toggle-input-method :transient t)
       ("v" "backend: varnavinyas" nepali-varnavinyas-set-backend :transient t)
       ("h" "backend: hunspell" nepali-hunspell-set-backend :transient t)
       ("s" "status" nepali-varnavinyas-status :transient t)]]))
@@ -1081,11 +1139,14 @@ Key bindings:
   :lighter " वर्ण"
   :keymap nepali-varnavinyas-mode-map
   :group 'nepali
-  (when nepali-varnavinyas-mode
-    (if nepali-varnavinyas-auto-install
-        (message "Varnavinyas will auto-download release %s if needed."
-                 nepali-varnavinyas-release-tag)
-      (message "Varnavinyas auto-install is disabled. Run `nepali-varnavinyas-install' or set `nepali-varnavinyas-program'."))))
+  (if nepali-varnavinyas-mode
+      (progn
+        (nepali--enable-input-method 'varnavinyas)
+        (if nepali-varnavinyas-auto-install
+            (message "Varnavinyas will auto-download release %s if needed."
+                     nepali-varnavinyas-release-tag)
+          (message "Varnavinyas auto-install is disabled. Run `nepali-varnavinyas-install' or set `nepali-varnavinyas-program'.")))
+    (nepali--disable-input-method 'varnavinyas)))
 
 ;;;###autoload
 (define-minor-mode nepali-varnavinyas-flymake-mode
@@ -1109,8 +1170,10 @@ Key bindings:
   :group 'nepali
   (if nepali-flyspell-mode
       (progn
+        (nepali--enable-input-method 'flyspell)
         (nepali--setup-ispell)
         (flyspell-mode 1))
+    (nepali--disable-input-method 'flyspell)
     (flyspell-mode -1)))
 
 (provide 'nepali)

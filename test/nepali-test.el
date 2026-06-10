@@ -28,6 +28,27 @@
     (should (equal (nepali--dict-directory)
                    "/tmp/nepali-hunspell-test/ne_NP_dict"))))
 
+(ert-deftest nepali-input-method-activates-configured-method ()
+  (with-temp-buffer
+    (let ((nepali-enable-input-method t)
+          (nepali-input-method "devanagari-itrans"))
+      (nepali--enable-input-method 'test)
+      (should (equal current-input-method "devanagari-itrans"))
+      (should (equal default-input-method "devanagari-itrans"))
+      (nepali--disable-input-method 'test)
+      (should-not current-input-method))))
+
+(ert-deftest nepali-input-method-stays-active-until-all-owners-release ()
+  (with-temp-buffer
+    (let ((nepali-enable-input-method t)
+          (nepali-input-method "devanagari-itrans"))
+      (nepali--enable-input-method 'flyspell)
+      (nepali--enable-input-method 'varnavinyas)
+      (nepali--disable-input-method 'flyspell)
+      (should (equal current-input-method "devanagari-itrans"))
+      (nepali--disable-input-method 'varnavinyas)
+      (should-not current-input-method))))
+
 (ert-deftest nepali-sha256-from-file-parses-shasum-format ()
   (let ((file (make-temp-file "nepali-sha256")))
     (unwind-protect

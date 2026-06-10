@@ -57,6 +57,20 @@ Install hunspell:
 
 By default, `nepali-check-buffer`, `nepali-check-word`, and `nepali-flyspell-mode` use Hunspell.
 
+When `nepali-flyspell-mode` is enabled, `nepali.el` also activates the configured Devanagari input method so you can type Nepali text immediately. The default is `devanagari-itrans`; use `C-\` or `M-x nepali-toggle-input-method` to toggle it.
+
+To use a different input method:
+
+```elisp
+(setq nepali-input-method "devanagari-inscript")
+```
+
+To keep input methods manual:
+
+```elisp
+(setq nepali-enable-input-method nil)
+```
+
 The bundled Hunspell dictionary is extracted under `user-emacs-directory/nepali/hunspell/`, so package installations can stay read-only.
 
 ## Varnavinyas workflow
@@ -183,6 +197,7 @@ When `nepali-varnavinyas-mode` is enabled:
 | `C-c n A` | Apply all safe direct corrections |
 | `C-c n i` | Install or reuse the pinned Varnavinyas CLI |
 | `C-c n R` | Reinstall the pinned Varnavinyas CLI |
+| <kbd>C-c n \\</kbd> | Toggle the configured Devanagari input method |
 | `C-c n l` | List current diagnostics |
 | `C-c n c` | Clear diagnostics |
 
