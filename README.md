@@ -59,11 +59,26 @@ By default, `nepali-check-buffer`, `nepali-check-word`, and `nepali-flyspell-mod
 
 When `nepali-flyspell-mode` is enabled, `nepali.el` also activates the configured Devanagari input method so you can type Nepali text immediately. The default is `devanagari-itrans`; use `C-\` or `M-x nepali-toggle-input-method` to toggle it.
 
-To use a different input method:
+To choose interactively:
+
+```text
+M-x nepali-select-input-method
+```
+
+To set a preferred input method in Lisp:
 
 ```elisp
 (setq nepali-input-method "devanagari-inscript")
 ```
+
+Built-in Devanagari choices include:
+
+| Input method | Value |
+|---|---|
+| ITRANS | `devanagari-itrans` |
+| AIBA | `devanagari-aiba` |
+| InScript | `devanagari-inscript` |
+| Kyoto-Harvard | `devanagari-kyoto-harvard` |
 
 To keep input methods manual:
 
@@ -198,6 +213,7 @@ When `nepali-varnavinyas-mode` is enabled:
 | `C-c n i` | Install or reuse the pinned Varnavinyas CLI |
 | `C-c n R` | Reinstall the pinned Varnavinyas CLI |
 | <kbd>C-c n \\</kbd> | Toggle the configured Devanagari input method |
+| `C-c n I` | Select a Devanagari input method |
 | `C-c n l` | List current diagnostics |
 | `C-c n c` | Clear diagnostics |
 

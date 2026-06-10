@@ -49,6 +49,15 @@
       (nepali--disable-input-method 'varnavinyas)
       (should-not current-input-method))))
 
+(ert-deftest nepali-select-input-method-switches-active-method ()
+  (with-temp-buffer
+    (let ((nepali-input-method "devanagari-itrans"))
+      (nepali--enable-input-method 'test)
+      (nepali-select-input-method "devanagari-inscript")
+      (should (equal nepali-input-method "devanagari-inscript"))
+      (should (equal current-input-method "devanagari-inscript"))
+      (should (equal default-input-method "devanagari-inscript")))))
+
 (ert-deftest nepali-sha256-from-file-parses-shasum-format ()
   (let ((file (make-temp-file "nepali-sha256")))
     (unwind-protect

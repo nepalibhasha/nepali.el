@@ -60,7 +60,9 @@ diagnostics."
 The default uses romanized ITRANS-style typing.  Users who prefer the
 standard InScript keyboard can set this to `devanagari-inscript'."
   :type '(choice (const :tag "Devanagari ITRANS" "devanagari-itrans")
+                 (const :tag "Devanagari AIBA" "devanagari-aiba")
                  (const :tag "Devanagari InScript" "devanagari-inscript")
+                 (const :tag "Devanagari Kyoto-Harvard" "devanagari-kyoto-harvard")
                  (string :tag "Other Emacs input method"))
   :group 'nepali)
 
@@ -146,6 +148,13 @@ explicit `nepali-varnavinyas-install'."
 (defvar-local nepali--input-method-owners nil
   "Nepali minor modes that currently requested the input method.")
 
+(defconst nepali-input-methods
+  '(("Devanagari ITRANS" . "devanagari-itrans")
+    ("Devanagari AIBA" . "devanagari-aiba")
+    ("Devanagari InScript" . "devanagari-inscript")
+    ("Devanagari Kyoto-Harvard" . "devanagari-kyoto-harvard"))
+  "Built-in Devanagari input methods commonly useful for Nepali.")
+
 (defconst nepali-varnavinyas--binary-name
   (if (eq system-type 'windows-nt) "varnavinyas.exe" "varnavinyas")
   "Filename of the installed Varnavinyas executable.")
@@ -173,6 +182,7 @@ explicit `nepali-varnavinyas-install'."
     (define-key map (kbd "C-c n i") #'nepali-varnavinyas-install)
     (define-key map (kbd "C-c n R") #'nepali-varnavinyas-reinstall)
     (define-key map (kbd "C-c n \\") #'nepali-toggle-input-method)
+    (define-key map (kbd "C-c n I") #'nepali-select-input-method)
     (define-key map (kbd "C-c n l") #'nepali-show-diagnostics)
     (define-key map (kbd "C-c n c") #'nepali-clear-diagnostics)
     (define-key map (kbd "C-c n ?") #'nepali-varnavinyas-dispatch)
@@ -924,6 +934,22 @@ to the beginning."
            (or current-input-method "off")))
 
 ;;;###autoload
+(defun nepali-select-input-method (method)
+  "Select METHOD as the Nepali Devanagari input method for this buffer."
+  (interactive
+   (list
+    (let* ((choices (mapcar #'cdr nepali-input-methods))
+           (current (or nepali-input-method "devanagari-itrans")))
+      (completing-read
+       (format "Nepali input method (%s): " current)
+       choices nil nil nil nil current))))
+  (setq-local nepali-input-method method)
+  (setq-local default-input-method method)
+  (when current-input-method
+    (activate-input-method method))
+  (message "Nepali input method set to %s" method))
+
+;;;###autoload
 (defun nepali-varnavinyas-install ()
   "Install the pinned Varnavinyas CLI release into the local cache."
   (interactive)
@@ -1001,6 +1027,7 @@ to the beginning."
       ("g" "toggle grammar" nepali-varnavinyas-toggle-grammar :transient t)
       ("I" "toggle auto-install" nepali-varnavinyas-toggle-auto-install :transient t)
       ("\\" "toggle input method" nepali-toggle-input-method :transient t)
+      ("M" "select input method" nepali-select-input-method :transient t)
       ("v" "backend: varnavinyas" nepali-varnavinyas-set-backend :transient t)
       ("h" "backend: hunspell" nepali-hunspell-set-backend :transient t)
       ("s" "status" nepali-varnavinyas-status :transient t)]]))
