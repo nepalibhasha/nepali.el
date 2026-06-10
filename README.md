@@ -63,13 +63,13 @@ The Varnavinyas workflow is optional and experimental. It does not force Varnavi
 
 ### Quick start
 
-Download a Varnavinyas release artifact from [GitHub Releases](https://github.com/nepalibhasha/varnavinyas/releases), then configure it if needed:
+On first use, `nepali.el` downloads the pinned Varnavinyas CLI release from [GitHub Releases](https://github.com/nepalibhasha/varnavinyas/releases) into `user-emacs-directory` and reuses that cached binary later. If you want to use a different install, configure it explicitly:
 
 ```elisp
 (setq nepali-varnavinyas-program "/path/to/varnavinyas")
 ```
 
-That path can be the release binary you downloaded, a system install, or any other executable you want to use.
+If `nepali-varnavinyas-program` is nil, `nepali.el` manages the release download automatically. If you set it, that path can be a release binary you downloaded, a system install, or any other executable you want to use.
 
 Enable the Varnavinyas key bindings:
 
@@ -177,13 +177,13 @@ Optional grammar/samasa heuristics can be enabled with:
 
 ### Troubleshooting
 
-If you see an error that Varnavinyas is required, either put `varnavinyas` on Emacs' `exec-path` or set:
+If you see an error that Varnavinyas is required, either let `nepali.el` auto-download the pinned release, or set:
 
 ```elisp
 (setq nepali-varnavinyas-program "/absolute/path/to/varnavinyas")
 ```
 
-The usual setup is to download a release binary from [GitHub Releases](https://github.com/nepalibhasha/varnavinyas/releases) and point `nepali-varnavinyas-program` at it.
+The pinned release tag is managed by `nepali-varnavinyas-release-tag`. If the package updates that tag, the cached binary in `user-emacs-directory` is replaced by the new release on first use.
 
 If the command menu is unavailable, install `transient` or use the direct `M-x nepali-varnavinyas-*` commands.
 

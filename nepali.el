@@ -35,6 +35,7 @@
 (require 'json)
 (require 'seq)
 (require 'subr-x)
+(require 'url)
 (require 'transient nil t)
 
 (defgroup nepali nil
@@ -52,8 +53,33 @@ diagnostics."
                  (const :tag "Varnavinyas" varnavinyas))
   :group 'nepali)
 
-(defcustom nepali-varnavinyas-program "varnavinyas"
-  "Program name or path for the varnavinyas CLI."
+(defcustom nepali-varnavinyas-program nil
+  "Explicit path or command name for the varnavinyas CLI.
+
+When nil, nepali.el automatically downloads the pinned release asset into
+`user-emacs-directory' and uses that cached executable."
+  :type '(choice (const :tag "Auto-download pinned release" nil)
+                 (string :tag "Executable path or command name"))
+  :group 'nepali)
+
+(defcustom nepali-varnavinyas-release-tag "cli-v0.1.0"
+  "Pinned Varnavinyas release tag to download when auto-managing the CLI."
+  :type 'string
+  :group 'nepali)
+
+(defcustom nepali-varnavinyas-cache-directory
+  (locate-user-emacs-file "nepali/varnavinyas/")
+  "Directory where nepali.el caches downloaded Varnavinyas release assets."
+  :type 'directory
+  :group 'nepali)
+
+(defcustom nepali-varnavinyas-release-owner "nepalibhasha"
+  "GitHub owner that publishes Varnavinyas release assets."
+  :type 'string
+  :group 'nepali)
+
+(defcustom nepali-varnavinyas-release-repo "varnavinyas"
+  "GitHub repository that publishes Varnavinyas release assets."
   :type 'string
   :group 'nepali)
 
@@ -83,6 +109,10 @@ diagnostics."
 
 (defvar-local nepali-varnavinyas--last-source-buffer nil
   "Source buffer for the current Varnavinyas summary buffer.")
+
+(defconst nepali-varnavinyas--binary-name
+  (if (eq system-type 'windows-nt) "varnavinyas.exe" "varnavinyas")
+  "Filename of the installed Varnavinyas executable.")
 
 (defvar nepali-varnavinyas-summary-mode-map
   (let ((map (make-sparse-keymap)))
@@ -165,25 +195,186 @@ diagnostics."
                  nil
                  utf-8))))
 
+(defun nepali--varnavinyas-platform-triplet ()
+  "Return the release triplet for the current platform."
+  (pcase system-type
+    ('darwin
+     (if (string-match-p "aarch64\\|arm64" system-configuration)
+         "aarch64-apple-darwin"
+       "x86_64-apple-darwin"))
+    ('gnu/linux "x86_64-unknown-linux-gnu")
+    ('windows-nt "x86_64-pc-windows-msvc")
+    (_ nil)))
+
+(defun nepali--varnavinyas-archive-extension ()
+  "Return the archive extension for the current platform."
+  (if (eq system-type 'windows-nt) "zip" "tar.gz"))
+
+(defun nepali--varnavinyas-asset-name ()
+  "Return the release asset name for the current platform."
+  (let ((triplet (nepali--varnavinyas-platform-triplet)))
+    (unless triplet
+      (user-error "Unsupported platform for the Varnavinyas release installer: %s"
+                  system-type))
+    (format "varnavinyas-%s-%s.%s"
+            nepali-varnavinyas-release-tag
+            triplet
+            (nepali--varnavinyas-archive-extension))))
+
+(defun nepali--varnavinyas-asset-checksum-name ()
+  "Return the checksum asset name for the current platform archive."
+  (concat (nepali--varnavinyas-asset-name) ".sha256"))
+
+(defun nepali--varnavinyas-release-base-url ()
+  "Return the base download URL for the pinned Varnavinyas release."
+  (format "https://github.com/%s/%s/releases/download/%s"
+          nepali-varnavinyas-release-owner
+          nepali-varnavinyas-release-repo
+          nepali-varnavinyas-release-tag))
+
+(defun nepali--varnavinyas-archive-url ()
+  "Return the release archive URL for the current platform."
+  (concat (nepali--varnavinyas-release-base-url)
+          "/"
+          (nepali--varnavinyas-asset-name)))
+
+(defun nepali--varnavinyas-checksum-url ()
+  "Return the checksum asset URL for the current platform."
+  (concat (nepali--varnavinyas-release-base-url)
+          "/"
+          (nepali--varnavinyas-asset-checksum-name)))
+
+(defun nepali--varnavinyas-install-root ()
+  "Return the cache directory for the pinned Varnavinyas release."
+  (expand-file-name
+   (format "%s/%s/"
+           nepali-varnavinyas-release-tag
+           (or (nepali--varnavinyas-platform-triplet)
+               "unsupported"))
+   (file-name-as-directory nepali-varnavinyas-cache-directory)))
+
+(defun nepali--varnavinyas-cached-binary ()
+  "Return the cached Varnavinyas executable path for this platform."
+  (expand-file-name nepali-varnavinyas--binary-name
+                    (nepali--varnavinyas-install-root)))
+
+(defun nepali--varnavinyas-explicit-command ()
+  "Return the explicit Varnavinyas command, if any."
+  (when (and (stringp nepali-varnavinyas-program)
+             (not (string-empty-p (string-trim nepali-varnavinyas-program))))
+    (or (executable-find nepali-varnavinyas-program)
+        (let ((absolute (expand-file-name nepali-varnavinyas-program)))
+          (when (file-executable-p absolute)
+            absolute)))))
+
+(defun nepali--varnavinyas-managed-command ()
+  "Return the cached Varnavinyas command, if it exists."
+  (let ((cached (nepali--varnavinyas-cached-binary)))
+    (when (file-executable-p cached)
+      cached)))
+
 (defun nepali--varnavinyas-available-p ()
   "Return path to varnavinyas if available, nil otherwise."
-  (seq-find #'file-executable-p
-            (delq nil
-                  (list
-                   (executable-find nepali-varnavinyas-program)
-                   (when (string-match-p "/" nepali-varnavinyas-program)
-                     (expand-file-name nepali-varnavinyas-program))))))
+  (or (nepali--varnavinyas-explicit-command)
+      (nepali--varnavinyas-managed-command)))
+
+(defun nepali--download-file (url target)
+  "Download URL to TARGET."
+  (make-directory (file-name-directory target) t)
+  (let ((temp-file (make-temp-file "nepali-varnavinyas")))
+    (unwind-protect
+        (progn
+          (url-copy-file url temp-file t)
+          (rename-file temp-file target t))
+      (when (file-exists-p temp-file)
+        (delete-file temp-file)))))
+
+(defun nepali--file-sha256 (file)
+  "Return the SHA256 hex digest of FILE."
+  (with-temp-buffer
+    (insert-file-contents-literally file)
+    (secure-hash 'sha256 (current-buffer))))
+
+(defun nepali--sha256-from-file (file)
+  "Read the SHA256 digest from FILE."
+  (with-temp-buffer
+    (insert-file-contents-literally file)
+    (goto-char (point-min))
+    (unless (re-search-forward "\\`\\([0-9a-fA-F]+\\)\\(?:[ \t]+\\|\\'\\)" nil t)
+      (user-error "Could not parse checksum file %s" file))
+    (downcase (match-string 1))))
+
+(defun nepali--extract-archive (archive destination)
+  "Extract ARCHIVE into DESTINATION."
+  (make-directory destination t)
+  (let ((exit-code
+         (call-process
+          "tar" nil nil nil
+          (if (string-match-p "\\.zip\\'" archive) "-xf" "-xzf")
+          archive
+          "-C" destination)))
+    (unless (zerop exit-code)
+      (if (and (string-match-p "\\.zip\\'" archive)
+               (executable-find "unzip"))
+          (let ((zip-exit (call-process "unzip" nil nil nil "-o" archive "-d" destination)))
+            (unless (zerop zip-exit)
+              (user-error "Failed to extract Varnavinyas archive %s" archive)))
+        (user-error "Failed to extract Varnavinyas archive %s" archive)))))
+
+(defun nepali--find-installed-varnavinyas (directory)
+  "Find the Varnavinyas executable inside DIRECTORY."
+  (seq-find
+   (lambda (path)
+     (and (file-regular-p path)
+          (string= (file-name-nondirectory path)
+                   nepali-varnavinyas--binary-name)
+          (file-executable-p path)))
+   (directory-files-recursively directory ".*")))
+
+(defun nepali--install-varnavinyas-release ()
+  "Download and install the pinned Varnavinyas release into the cache."
+  (unless (and (null nepali-varnavinyas-program)
+               (nepali--varnavinyas-platform-triplet))
+    (user-error "Automatic Varnavinyas installation is unavailable on this platform"))
+  (let* ((install-root (nepali--varnavinyas-install-root))
+         (archive-file (expand-file-name (nepali--varnavinyas-asset-name) install-root))
+         (checksum-file (expand-file-name (nepali--varnavinyas-asset-checksum-name) install-root))
+         (extract-dir (make-temp-file "nepali-varnavinyas" t))
+         (installed-binary (expand-file-name nepali-varnavinyas--binary-name install-root)))
+    (unless (file-executable-p installed-binary)
+      (message "nepali.el: downloading Varnavinyas %s..." nepali-varnavinyas-release-tag)
+      (make-directory install-root t)
+      (unwind-protect
+          (progn
+            (nepali--download-file (nepali--varnavinyas-archive-url) archive-file)
+            (nepali--download-file (nepali--varnavinyas-checksum-url) checksum-file)
+            (let ((expected (nepali--sha256-from-file checksum-file))
+                  (actual (nepali--file-sha256 archive-file)))
+              (unless (string= expected actual)
+                (user-error "Checksum mismatch for %s" archive-file)))
+            (nepali--extract-archive archive-file extract-dir)
+            (let ((source-binary (nepali--find-installed-varnavinyas extract-dir)))
+              (unless source-binary
+                (user-error "Could not find the Varnavinyas executable in the release archive"))
+              (copy-file source-binary installed-binary t)
+              (set-file-modes installed-binary #o755)
+              (message "nepali.el: Varnavinyas ready at %s" installed-binary)))
+        (when (file-exists-p extract-dir)
+          (delete-directory extract-dir t))))
+    installed-binary))
 
 (defun nepali--varnavinyas-command ()
   "Return the resolved varnavinyas command path."
-  (or (nepali--varnavinyas-available-p)
-      nepali-varnavinyas-program))
+  (or (nepali--varnavinyas-explicit-command)
+      (and (null nepali-varnavinyas-program)
+           (or (nepali--varnavinyas-managed-command)
+               (nepali--install-varnavinyas-release)))
+      (user-error
+       "nepali.el requires varnavinyas for this backend.  Set `nepali-varnavinyas-program' to an executable path or command name, or allow the pinned release to auto-download into `user-emacs-directory'.")))
 
 (defun nepali--ensure-varnavinyas ()
   "Signal an error if varnavinyas is not installed."
-  (unless (nepali--varnavinyas-available-p)
-    (user-error
-     "nepali.el requires varnavinyas for this backend.  Download a release binary from GitHub Releases, put it on `exec-path', or set `nepali-varnavinyas-program' to that executable.")))
+  (nepali--varnavinyas-command))
 
 (defun nepali--varnavinyas-args ()
   "Return command arguments for varnavinyas JSON diagnostics."
@@ -646,10 +837,11 @@ to the beginning."
 (defun nepali-varnavinyas-status ()
   "Show Varnavinyas integration status."
   (interactive)
-  (message "backend=%s grammar=%s program=%s diagnostics=%d"
+  (message "backend=%s grammar=%s program=%s release=%s diagnostics=%d"
            nepali-backend
            (if nepali-varnavinyas-enable-grammar "on" "off")
            (or (nepali--varnavinyas-available-p) "not found")
+           nepali-varnavinyas-release-tag
            (length nepali-varnavinyas--diagnostics)))
 
 (defun nepali-varnavinyas-dispatch ()
@@ -818,9 +1010,9 @@ Key bindings:
   :lighter " वर्ण"
   :keymap nepali-varnavinyas-mode-map
   :group 'nepali
-  (when (and nepali-varnavinyas-mode
-             (not (nepali--varnavinyas-available-p)))
-    (message "Varnavinyas CLI not found.  Checks will prompt you to set `nepali-varnavinyas-program'.")))
+  (when nepali-varnavinyas-mode
+    (message "Varnavinyas will auto-download release %s if needed."
+             nepali-varnavinyas-release-tag)))
 
 ;;;###autoload
 (define-minor-mode nepali-varnavinyas-flymake-mode
