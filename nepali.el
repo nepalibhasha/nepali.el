@@ -1026,31 +1026,32 @@ This command is kept for compatibility.  New key bindings should call
       ("w" "word" nepali-varnavinyas-check-word :transient t)
       ("r" "region" nepali-varnavinyas-check-region :transient t)
       ("b" "buffer" nepali-varnavinyas-check-buffer :transient t)]
-     ["Diagnostics"
+     ["Move"
       ("n" "next" nepali-varnavinyas-next-diagnostic :transient t)
       ("p" "previous" nepali-varnavinyas-previous-diagnostic :transient t)
-      ("d" "at point" nepali-varnavinyas-diagnostic-at-point :transient t)
+      ("d" "details" nepali-varnavinyas-diagnostic-at-point :transient t)]]
+    [["Diagnostics"
       ("l" "list" nepali-show-diagnostics :transient t)
       ("c" "clear" nepali-clear-diagnostics :transient t)]
      ["Fix"
-      ("a" "apply at point" nepali-varnavinyas-apply-correction-at-point :transient t)
-      ("A" "apply all safe" nepali-varnavinyas-apply-all-corrections :transient t)]
-     ["CLI"
-      ("i" "install/update" nepali-varnavinyas-install :transient t)
+      ("a" "apply" nepali-varnavinyas-apply-correction-at-point :transient t)
+      ("A" "apply all" nepali-varnavinyas-apply-all-corrections :transient t)]]
+    [["Typing"
+      ("M" "select method" nepali-select-input-method :transient t)
+      ("\\" "toggle method" nepali-toggle-input-method :transient t)
+      ("T" "method status" nepali-input-method-status :transient t)]
+     ["Modes"
+      ("m" "varnavinyas" nepali-varnavinyas-mode :transient t)
+      ("f" "flymake" nepali-varnavinyas-flymake-mode :transient t)]]
+    [["CLI"
+      ("i" "install" nepali-varnavinyas-install :transient t)
       ("R" "reinstall" nepali-varnavinyas-reinstall :transient t)
       ("K" "clear cache" nepali-varnavinyas-clear-cache :transient t)]
-     ["Typing"
-      ("M" "select input method" nepali-select-input-method :transient t)
-      ("\\" "toggle input method" nepali-toggle-input-method :transient t)
-      ("T" "input method status" nepali-input-method-status :transient t)]
-     ["Modes"
-      ("m" "varnavinyas mode" nepali-varnavinyas-mode :transient t)
-      ("f" "flymake" nepali-varnavinyas-flymake-mode :transient t)]
      ["Options"
-      ("g" "toggle grammar" nepali-varnavinyas-toggle-grammar :transient t)
-      ("I" "toggle auto-install" nepali-varnavinyas-toggle-auto-install :transient t)
-      ("v" "backend: varnavinyas" nepali-varnavinyas-set-backend :transient t)
-      ("h" "backend: hunspell" nepali-hunspell-set-backend :transient t)
+      ("g" "grammar" nepali-varnavinyas-toggle-grammar :transient t)
+      ("I" "auto-install" nepali-varnavinyas-toggle-auto-install :transient t)
+      ("v" "use varnavinyas" nepali-varnavinyas-set-backend :transient t)
+      ("h" "use hunspell" nepali-hunspell-set-backend :transient t)
       ("s" "status" nepali-varnavinyas-status :transient t)]]))
 
 (defun nepali--flymake-type (diagnostic)

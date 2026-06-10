@@ -227,7 +227,7 @@ When `nepali-varnavinyas-mode` is enabled:
 
 ### Command menu
 
-`M-x nepali-dispatch` opens the optional Transient command menu and activates the configured Devanagari input method in the current buffer. It follows the same interaction style as Magit and stays open after actions. If `transient` is not installed, all direct commands and key bindings still work.
+`M-x nepali-dispatch` opens the optional Transient command menu and activates the configured Devanagari input method in the current buffer. It follows the same interaction style as Magit, uses stacked command groups for narrower frames, and stays open after actions. If `transient` is not installed, all direct commands and key bindings still work.
 
 The menu includes a Typing section for selecting, toggling, and inspecting the active input method.
 
