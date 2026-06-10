@@ -185,7 +185,7 @@ explicit `nepali-varnavinyas-install'."
     (define-key map (kbd "C-c n I") #'nepali-select-input-method)
     (define-key map (kbd "C-c n l") #'nepali-show-diagnostics)
     (define-key map (kbd "C-c n c") #'nepali-clear-diagnostics)
-    (define-key map (kbd "C-c n ?") #'nepali-varnavinyas-dispatch)
+    (define-key map (kbd "C-c n ?") #'nepali-dispatch)
     map)
   "Keymap for `nepali-varnavinyas-mode'.")
 
@@ -949,6 +949,14 @@ to the beginning."
     (activate-input-method method))
   (message "Nepali input method set to %s" method))
 
+(defun nepali-input-method-status ()
+  "Show the current Nepali input method state."
+  (interactive)
+  (message "input-method=%s configured=%s auto-enable=%s"
+           (or current-input-method "off")
+           nepali-input-method
+           (if nepali-enable-input-method "on" "off")))
+
 ;;;###autoload
 (defun nepali-varnavinyas-install ()
   "Install the pinned Varnavinyas CLI release into the local cache."
@@ -993,12 +1001,23 @@ to the beginning."
            (file-name-as-directory nepali-varnavinyas-cache-directory)
            (length nepali-varnavinyas--diagnostics)))
 
-(defun nepali-varnavinyas-dispatch ()
-  "Open the Varnavinyas dispatcher."
+;;;###autoload
+(defun nepali-dispatch ()
+  "Open the Nepali command dispatcher."
   (interactive)
+  (nepali--enable-input-method 'dispatch)
   (if (fboundp 'nepali-varnavinyas--dispatch)
       (nepali-varnavinyas--dispatch)
     (user-error "The transient package is not available.  Use `nepali-varnavinyas-mode' key bindings or install transient")))
+
+;;;###autoload
+(defun nepali-varnavinyas-dispatch ()
+  "Open the Nepali command dispatcher.
+
+This command is kept for compatibility.  New key bindings should call
+`nepali-dispatch'."
+  (interactive)
+  (nepali-dispatch))
 
 (when (featurep 'transient)
   (transient-define-prefix nepali-varnavinyas--dispatch ()
@@ -1020,14 +1039,16 @@ to the beginning."
       ("i" "install/update" nepali-varnavinyas-install :transient t)
       ("R" "reinstall" nepali-varnavinyas-reinstall :transient t)
       ("K" "clear cache" nepali-varnavinyas-clear-cache :transient t)]
+     ["Typing"
+      ("M" "select input method" nepali-select-input-method :transient t)
+      ("\\" "toggle input method" nepali-toggle-input-method :transient t)
+      ("T" "input method status" nepali-input-method-status :transient t)]
      ["Modes"
       ("m" "varnavinyas mode" nepali-varnavinyas-mode :transient t)
       ("f" "flymake" nepali-varnavinyas-flymake-mode :transient t)]
      ["Options"
       ("g" "toggle grammar" nepali-varnavinyas-toggle-grammar :transient t)
       ("I" "toggle auto-install" nepali-varnavinyas-toggle-auto-install :transient t)
-      ("\\" "toggle input method" nepali-toggle-input-method :transient t)
-      ("M" "select input method" nepali-select-input-method :transient t)
       ("v" "backend: varnavinyas" nepali-varnavinyas-set-backend :transient t)
       ("h" "backend: hunspell" nepali-hunspell-set-backend :transient t)
       ("s" "status" nepali-varnavinyas-status :transient t)]]))

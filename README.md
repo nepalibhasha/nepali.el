@@ -26,12 +26,19 @@ Install hunspell:
 (require 'nepali)
 ```
 
+Optional Magit-style global dispatcher binding:
+
+```elisp
+(global-set-key (kbd "C-c n") #'nepali-dispatch)
+```
+
 ### use-package
 
 ```elisp
 (use-package nepali
   :load-path "/path/to/nepali.el"
-  :commands (nepali-flyspell-mode nepali-check-buffer nepali-check-word)
+  :commands (nepali-dispatch nepali-flyspell-mode nepali-check-buffer nepali-check-word)
+  :bind (("C-c n" . nepali-dispatch))
   :hook (text-mode . nepali-flyspell-mode))
 ```
 
@@ -41,7 +48,8 @@ Install hunspell:
 (use-package nepali
   :straight (:host github :repo "nepalibhasha/nepali.el"
              :files ("nepali.el" "ne_NP_dict.zip"))
-  :commands (nepali-flyspell-mode nepali-check-buffer nepali-check-word)
+  :commands (nepali-dispatch nepali-flyspell-mode nepali-check-buffer nepali-check-word)
+  :bind (("C-c n" . nepali-dispatch))
   :hook (text-mode . nepali-flyspell-mode))
 ```
 
@@ -219,7 +227,15 @@ When `nepali-varnavinyas-mode` is enabled:
 
 ### Command menu
 
-`M-x nepali-varnavinyas-dispatch` opens the optional Transient command menu. It follows the same interaction style as Magit and stays open after actions. If `transient` is not installed, all direct commands and key bindings still work.
+`M-x nepali-dispatch` opens the optional Transient command menu and activates the configured Devanagari input method in the current buffer. It follows the same interaction style as Magit and stays open after actions. If `transient` is not installed, all direct commands and key bindings still work.
+
+The menu includes a Typing section for selecting, toggling, and inspecting the active input method.
+
+For a Magit-style global summon key, bind it in your config:
+
+```elisp
+(global-set-key (kbd "C-c n") #'nepali-dispatch)
+```
 
 ### Grammar heuristics
 

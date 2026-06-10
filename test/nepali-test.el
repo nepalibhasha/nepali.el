@@ -58,6 +58,19 @@
       (should (equal current-input-method "devanagari-inscript"))
       (should (equal default-input-method "devanagari-inscript")))))
 
+(ert-deftest nepali-dispatch-commands-exist ()
+  (should (commandp 'nepali-dispatch))
+  (should (commandp 'nepali-varnavinyas-dispatch)))
+
+(ert-deftest nepali-dispatch-activates-input-method ()
+  (with-temp-buffer
+    (let ((nepali-enable-input-method t)
+          (nepali-input-method "devanagari-itrans"))
+      (cl-letf (((symbol-function 'nepali-varnavinyas--dispatch)
+                 (lambda () 'opened)))
+        (should (eq (nepali-dispatch) 'opened))
+        (should (equal current-input-method "devanagari-itrans"))))))
+
 (ert-deftest nepali-sha256-from-file-parses-shasum-format ()
   (let ((file (make-temp-file "nepali-sha256")))
     (unwind-protect
