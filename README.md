@@ -57,6 +57,8 @@ Install hunspell:
 
 By default, `nepali-check-buffer`, `nepali-check-word`, and `nepali-flyspell-mode` use Hunspell.
 
+The bundled Hunspell dictionary is extracted under `user-emacs-directory/nepali/hunspell/`, so package installations can stay read-only.
+
 ## Varnavinyas workflow
 
 The Varnavinyas workflow is optional and experimental. It does not force Varnavinyas into Hunspell/flyspell; it runs the external `varnavinyas` CLI and reports richer rule-backed diagnostics with overlays, navigation, and a jumpable summary buffer.
@@ -78,6 +80,14 @@ If `nepali-varnavinyas-program` is nil, `nepali.el` manages the release download
 The pinned release tag is controlled by `nepali-varnavinyas-release-tag`. When the package updates that tag, the cached binary under `user-emacs-directory/nepali/varnavinyas/` is refreshed on first use.
 
 Automatic CLI installation currently supports the published Varnavinyas assets for macOS `aarch64`/`x86_64`, Linux `x86_64`, and Windows `x86_64`. Other platforms can use `nepali-varnavinyas-program` to point at a compatible local executable.
+
+To require explicit installation instead of first-check network access:
+
+```elisp
+(setq nepali-varnavinyas-auto-install nil)
+```
+
+Then run `M-x nepali-varnavinyas-install` once, or set `nepali-varnavinyas-program`.
 
 Enable the Varnavinyas key bindings:
 
@@ -199,6 +209,14 @@ If you see an error that Varnavinyas is required, either let `nepali.el` auto-do
 If a download is interrupted or the cached executable looks stale, run `M-x nepali-varnavinyas-reinstall`. To remove all managed release artifacts, run `M-x nepali-varnavinyas-clear-cache`.
 
 If the command menu is unavailable, install `transient` or use the direct `M-x nepali-varnavinyas-*` commands.
+
+## Development
+
+Run the test suite with:
+
+```sh
+emacs -Q --batch -L . -l test/nepali-test.el -f ert-run-tests-batch-and-exit
+```
 
 ## Dictionaries and engines
 

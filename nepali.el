@@ -67,6 +67,14 @@ When nil, nepali.el automatically downloads the pinned release asset into
   :type 'string
   :group 'nepali)
 
+(defcustom nepali-varnavinyas-auto-install t
+  "Whether Varnavinyas checks may auto-install the pinned CLI release.
+
+When nil, checks require either `nepali-varnavinyas-program' or a prior
+explicit `nepali-varnavinyas-install'."
+  :type 'boolean
+  :group 'nepali)
+
 (defcustom nepali-varnavinyas-cache-directory
   (locate-user-emacs-file "nepali/varnavinyas/")
   "Directory where nepali.el caches downloaded Varnavinyas release assets."
@@ -86,6 +94,12 @@ When nil, nepali.el automatically downloads the pinned release asset into
 (defcustom nepali-varnavinyas-enable-grammar nil
   "Whether to pass --grammar to varnavinyas checks."
   :type 'boolean
+  :group 'nepali)
+
+(defcustom nepali-hunspell-cache-directory
+  (locate-user-emacs-file "nepali/hunspell/")
+  "Directory where nepali.el extracts the bundled Hunspell dictionary."
+  :type 'directory
   :group 'nepali)
 
 (defface nepali-varnavinyas-error-face
@@ -150,23 +164,24 @@ When nil, nepali.el automatically downloads the pinned release asset into
   (expand-file-name "ne_NP_dict.zip" nepali--directory)
   "Path to the bundled dictionary zip file.")
 
-(defvar nepali--dict-directory
-  (expand-file-name "ne_NP_dict" nepali--directory)
-  "Directory containing the ne_NP Hunspell dictionary files.")
+(defun nepali--dict-directory ()
+  "Return the directory containing extracted Hunspell dictionary files."
+  (expand-file-name "ne_NP_dict" nepali-hunspell-cache-directory))
 
 (defun nepali--ensure-dict ()
   "Unzip the dictionary on first use if not already extracted."
-  (unless (file-exists-p (expand-file-name "ne_NP.dic" nepali--dict-directory))
-    (unless (file-exists-p nepali--zip-file)
-      (user-error "Dictionary not found: %s" nepali--zip-file))
-    (message "nepali.el: extracting dictionary...")
-    (make-directory nepali--dict-directory t)
-    (let ((exit-code (call-process "unzip" nil nil nil
-                                   "-o" nepali--zip-file
-                                   "-d" nepali--dict-directory)))
-      (unless (zerop exit-code)
-        (user-error "Failed to unzip dictionary (exit code %d)" exit-code))
-      (message "nepali.el: dictionary ready."))))
+  (let ((dict-directory (nepali--dict-directory)))
+    (unless (file-exists-p (expand-file-name "ne_NP.dic" dict-directory))
+      (unless (file-exists-p nepali--zip-file)
+        (user-error "Dictionary not found: %s" nepali--zip-file))
+      (message "nepali.el: extracting dictionary...")
+      (make-directory dict-directory t)
+      (let ((exit-code (call-process "unzip" nil nil nil
+                                     "-o" nepali--zip-file
+                                     "-d" dict-directory)))
+        (unless (zerop exit-code)
+          (user-error "Failed to unzip dictionary (exit code %d)" exit-code))
+        (message "nepali.el: dictionary ready.")))))
 
 (defun nepali--hunspell-available-p ()
   "Return path to hunspell if available, nil otherwise."
@@ -193,7 +208,7 @@ When nil, nepali.el automatically downloads the pinned release asset into
                  "[^[:alpha:]]"
                  ""
                  nil
-                 ("-d" ,(expand-file-name "ne_NP" nepali--dict-directory))
+                 ("-d" ,(expand-file-name "ne_NP" (nepali--dict-directory)))
                  nil
                  utf-8))))
 
@@ -373,10 +388,13 @@ When nil, nepali.el automatically downloads the pinned release asset into
   "Return the resolved varnavinyas command path."
   (or (nepali--varnavinyas-explicit-command)
       (and (null nepali-varnavinyas-program)
+           nepali-varnavinyas-auto-install
            (or (nepali--varnavinyas-managed-command)
                (nepali--install-varnavinyas-release)))
+      (and (null nepali-varnavinyas-program)
+           (nepali--varnavinyas-managed-command))
       (user-error
-       "nepali.el requires varnavinyas for this backend.  Set `nepali-varnavinyas-program' to an executable path or command name, or allow the pinned release to auto-download into `user-emacs-directory'.")))
+       "nepali.el requires varnavinyas for this backend.  Run `nepali-varnavinyas-install', set `nepali-varnavinyas-program', or enable `nepali-varnavinyas-auto-install'.")))
 
 (defun nepali--ensure-varnavinyas ()
   "Signal an error if varnavinyas is not installed."
@@ -472,7 +490,7 @@ Returned diagnostics use absolute buffer line and column positions."
              (point-min) (point-max)
              (nepali--hunspell-available-p)
              nil output-buffer nil
-             "-d" (expand-file-name "ne_NP" nepali--dict-directory))
+             "-d" (expand-file-name "ne_NP" (nepali--dict-directory)))
             (with-current-buffer output-buffer
               (let ((output (buffer-string))
                     suggestions)
@@ -828,6 +846,14 @@ to the beginning."
   (message "Varnavinyas grammar heuristics %s"
            (if nepali-varnavinyas-enable-grammar "enabled" "disabled")))
 
+(defun nepali-varnavinyas-toggle-auto-install ()
+  "Toggle automatic installation of the pinned Varnavinyas CLI release."
+  (interactive)
+  (setq nepali-varnavinyas-auto-install
+        (not nepali-varnavinyas-auto-install))
+  (message "Varnavinyas auto-install %s"
+           (if nepali-varnavinyas-auto-install "enabled" "disabled")))
+
 (defun nepali-varnavinyas-set-backend ()
   "Set `nepali-backend' to Varnavinyas."
   (interactive)
@@ -874,9 +900,10 @@ to the beginning."
 (defun nepali-varnavinyas-status ()
   "Show Varnavinyas integration status."
   (interactive)
-  (message "backend=%s grammar=%s platform=%s program=%s release=%s cache=%s diagnostics=%d"
+  (message "backend=%s grammar=%s auto-install=%s platform=%s program=%s release=%s cache=%s diagnostics=%d"
            nepali-backend
            (if nepali-varnavinyas-enable-grammar "on" "off")
+           (if nepali-varnavinyas-auto-install "on" "off")
            (or (nepali--varnavinyas-platform-triplet) "unsupported")
            (or (nepali--varnavinyas-available-p) "not found")
            nepali-varnavinyas-release-tag
@@ -915,6 +942,7 @@ to the beginning."
       ("f" "flymake" nepali-varnavinyas-flymake-mode :transient t)]
      ["Options"
       ("g" "toggle grammar" nepali-varnavinyas-toggle-grammar :transient t)
+      ("I" "toggle auto-install" nepali-varnavinyas-toggle-auto-install :transient t)
       ("v" "backend: varnavinyas" nepali-varnavinyas-set-backend :transient t)
       ("h" "backend: hunspell" nepali-hunspell-set-backend :transient t)
       ("s" "status" nepali-varnavinyas-status :transient t)]]))
@@ -1054,8 +1082,10 @@ Key bindings:
   :keymap nepali-varnavinyas-mode-map
   :group 'nepali
   (when nepali-varnavinyas-mode
-    (message "Varnavinyas will auto-download release %s if needed."
-             nepali-varnavinyas-release-tag)))
+    (if nepali-varnavinyas-auto-install
+        (message "Varnavinyas will auto-download release %s if needed."
+                 nepali-varnavinyas-release-tag)
+      (message "Varnavinyas auto-install is disabled. Run `nepali-varnavinyas-install' or set `nepali-varnavinyas-program'."))))
 
 ;;;###autoload
 (define-minor-mode nepali-varnavinyas-flymake-mode
