@@ -7,6 +7,7 @@
 - Added automatic Devanagari input method activation for Nepali writing modes, defaulting to `devanagari-itrans`, with built-in choices for ITRANS, AIBA, InScript, and Kyoto-Harvard.
 - Made `nepali-dispatch` prepare the current buffer for Nepali typing and expose input-method controls in the menu.
 - Improved the Transient dispatcher layout for narrower editor frames.
+- Fixed dispatcher input-method cleanup, Flymake process shutdown, and documented the `unzip` dependency.
 - Added an optional Transient dispatcher for Varnavinyas commands.
 - Added automatic installation of the pinned Varnavinyas CLI release into `user-emacs-directory`.
 - Added SHA256 verification and cache management commands for the managed Varnavinyas CLI.

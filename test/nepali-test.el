@@ -69,7 +69,18 @@
       (cl-letf (((symbol-function 'nepali-varnavinyas--dispatch)
                  (lambda () 'opened)))
         (should (eq (nepali-dispatch) 'opened))
-        (should (equal current-input-method "devanagari-itrans"))))))
+        (should-not current-input-method)
+        (should-not nepali--input-method-owners)))))
+
+(ert-deftest nepali-dispatch-cleans-up-input-method-on-error ()
+  (with-temp-buffer
+    (let ((nepali-enable-input-method t)
+          (nepali-input-method "devanagari-itrans"))
+      (cl-letf (((symbol-function 'nepali-varnavinyas--dispatch)
+                 (lambda () (error "boom"))))
+        (should-error (nepali-dispatch))
+        (should-not current-input-method)
+        (should-not nepali--input-method-owners)))))
 
 (ert-deftest nepali-sha256-from-file-parses-shasum-format ()
   (let ((file (make-temp-file "nepali-sha256")))
@@ -87,6 +98,16 @@
     (should (= (length diagnostics) 1))
     (should (equal (alist-get 'incorrect (car diagnostics)) "गल्ति"))
     (should (equal (alist-get 'correction (car diagnostics)) "गल्ती"))))
+
+(ert-deftest nepali-diagnostic-bounds-handle-devanagari-matras ()
+  (with-temp-buffer
+    (insert "राम किरण क्रिया")
+    (let* ((diagnostic '((line . 1)
+                         (column . 5)
+                         (incorrect . "किरण")))
+           (bounds (nepali--diagnostic-bounds diagnostic)))
+      (should (equal (buffer-substring-no-properties (car bounds) (cdr bounds))
+                     "किरण")))))
 
 (ert-deftest nepali-apply-correction-to-overlay-replaces-text ()
   (with-temp-buffer

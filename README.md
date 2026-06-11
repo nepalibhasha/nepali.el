@@ -8,14 +8,16 @@ Experimental support is also available for [Varnavinyas](https://github.com/nepa
 
 ## Prerequisites
 
-Install hunspell:
+Requires Emacs 26.1 or newer.
+
+Install Hunspell and `unzip`:
 
 | OS | Command |
 |---|---|
-| macOS | `brew install hunspell` |
-| Debian/Ubuntu | `sudo apt install hunspell` |
-| Fedora | `sudo dnf install hunspell` |
-| Arch | `sudo pacman -S hunspell` |
+| macOS | `brew install hunspell unzip` |
+| Debian/Ubuntu | `sudo apt install hunspell unzip` |
+| Fedora | `sudo dnf install hunspell unzip` |
+| Arch | `sudo pacman -S hunspell unzip` |
 
 ## Installation
 

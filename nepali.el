@@ -2,7 +2,7 @@
 
 ;; Author: Krishna Thapa
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "25.1"))
+;; Package-Requires: ((emacs "26.1"))
 ;; Keywords: i18n, languages, nepali, spellcheck
 ;; URL: https://github.com/nepalibhasha/nepali.el
 
@@ -230,6 +230,8 @@ explicit `nepali-varnavinyas-install'."
     (unless (file-exists-p (expand-file-name "ne_NP.dic" dict-directory))
       (unless (file-exists-p nepali--zip-file)
         (user-error "Dictionary not found: %s" nepali--zip-file))
+      (unless (executable-find "unzip")
+        (user-error "nepali.el requires unzip to extract the bundled Hunspell dictionary"))
       (message "nepali.el: extracting dictionary...")
       (make-directory dict-directory t)
       (let ((exit-code (call-process "unzip" nil nil nil
@@ -1005,9 +1007,12 @@ to the beginning."
 (defun nepali-dispatch ()
   "Open the Nepali command dispatcher."
   (interactive)
-  (nepali--enable-input-method 'dispatch)
   (if (fboundp 'nepali-varnavinyas--dispatch)
-      (nepali-varnavinyas--dispatch)
+      (progn
+        (nepali--enable-input-method 'dispatch)
+        (unwind-protect
+            (nepali-varnavinyas--dispatch)
+          (nepali--disable-input-method 'dispatch)))
     (user-error "The transient package is not available.  Use `nepali-varnavinyas-mode' key bindings or install transient")))
 
 ;;;###autoload
@@ -1209,6 +1214,9 @@ Key bindings:
         (add-hook 'flymake-diagnostic-functions
                   #'nepali--varnavinyas-flymake-backend nil t)
         (flymake-mode 1))
+    (when (process-live-p nepali-varnavinyas--flymake-process)
+      (kill-process nepali-varnavinyas--flymake-process))
+    (setq nepali-varnavinyas--flymake-process nil)
     (remove-hook 'flymake-diagnostic-functions
                  #'nepali--varnavinyas-flymake-backend t)))
 
