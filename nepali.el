@@ -155,6 +155,9 @@ explicit `nepali-varnavinyas-install'."
     ("Devanagari Kyoto-Harvard" . "devanagari-kyoto-harvard"))
   "Built-in Devanagari input methods commonly useful for Nepali.")
 
+(defconst nepali--word-character-ranges "ऀ-ॗक़-ॣॱ-ॿ"
+  "Character ranges treated as part of a Devanagari word.")
+
 (defconst nepali-varnavinyas--binary-name
   (if (eq system-type 'windows-nt) "varnavinyas.exe" "varnavinyas")
   "Filename of the installed Varnavinyas executable.")
@@ -699,9 +702,9 @@ Varnavinyas correction is listed first, followed by Hunspell suggestions."
         (start (point)))
     (insert (format "%s:%s:%s: [%s] %s -> %s\n"
                     source line column kind incorrect correction))
-    (put-text-property start (point) 'nepali-varnavinyas-diagnostic diagnostic)
     (insert (format "  %s\n\n"
-                    (nepali--diagnostic-message diagnostic)))))
+                    (nepali--diagnostic-message diagnostic)))
+    (put-text-property start (point) 'nepali-varnavinyas-diagnostic diagnostic)))
 
 (defun nepali-varnavinyas-summary-goto-diagnostic ()
   "Jump from the summary buffer to the diagnostic at point."
@@ -785,18 +788,18 @@ Varnavinyas correction is listed first, followed by Hunspell suggestions."
 (defun nepali--word-at-point ()
   "Return the Devanagari word at point, or nil."
   (save-excursion
-    (skip-chars-backward "ऀ-ॿ")
+    (skip-chars-backward nepali--word-character-ranges)
     (let ((beg (point)))
-      (skip-chars-forward "ऀ-ॿ")
+      (skip-chars-forward nepali--word-character-ranges)
       (unless (= beg (point))
         (buffer-substring-no-properties beg (point))))))
 
 (defun nepali--word-bounds-at-point ()
   "Return bounds of the Devanagari word at point, or nil."
   (save-excursion
-    (skip-chars-backward "ऀ-ॿ")
+    (skip-chars-backward nepali--word-character-ranges)
     (let ((beg (point)))
-      (skip-chars-forward "ऀ-ॿ")
+      (skip-chars-forward nepali--word-character-ranges)
       (unless (= beg (point))
         (cons beg (point))))))
 
@@ -1074,6 +1077,10 @@ This command is kept for compatibility.  New key bindings should call
                              (nepali--flymake-type diagnostic)
                              (nepali--diagnostic-message diagnostic))))
 
+(defun nepali--flymake-panic (report-fn explanation)
+  "Report a Flymake panic through REPORT-FN with EXPLANATION."
+  (funcall report-fn :panic :explanation explanation))
+
 (defun nepali--varnavinyas-flymake-sentinel (proc _event)
   "Handle completion for a varnavinyas Flymake process PROC."
   (when (memq (process-status proc) '(exit signal))
@@ -1089,10 +1096,10 @@ This command is kept for compatibility.  New key bindings should call
                   (let ((exit-code (process-exit-status proc))
                         (output (buffer-string)))
                     (if (not (memq exit-code '(0 1)))
-                        (funcall report-fn nil
-                                 :panic
-                                 (format "varnavinyas failed with exit code %s: %s"
-                                         exit-code (string-trim output)))
+                        (nepali--flymake-panic
+                         report-fn
+                         (format "varnavinyas failed with exit code %s: %s"
+                                 exit-code (string-trim output)))
                       (with-current-buffer source
                         (funcall report-fn
                                  (mapcar
@@ -1105,7 +1112,9 @@ This command is kept for compatibility.  New key bindings should call
 (defun nepali--varnavinyas-flymake-backend (report-fn &rest _args)
   "Flymake backend that reports varnavinyas diagnostics through REPORT-FN."
   (if (not (fboundp 'flymake-make-diagnostic))
-      (funcall report-fn nil :panic "This Emacs does not provide modern Flymake diagnostics")
+      (nepali--flymake-panic
+       report-fn
+       "This Emacs does not provide modern Flymake diagnostics")
     (nepali--ensure-varnavinyas)
     (let ((source (current-buffer))
           (output-buffer (generate-new-buffer " *nepali-varnavinyas-flymake-output*")))

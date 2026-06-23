@@ -109,6 +109,48 @@
       (should (equal (buffer-substring-no-properties (car bounds) (cdr bounds))
                      "किरण")))))
 
+(ert-deftest nepali-word-bounds-exclude-devanagari-punctuation ()
+  (with-temp-buffer
+    (insert "राम। कृष्ण")
+    (goto-char 2)
+    (let ((bounds (nepali--word-bounds-at-point)))
+      (should (equal (buffer-substring-no-properties (car bounds) (cdr bounds))
+                     "राम")))
+    (goto-char 5)
+    (should-not (nepali--word-bounds-at-point))))
+
+(ert-deftest nepali-word-bounds-exclude-devanagari-digits ()
+  (with-temp-buffer
+    (insert "१२ राम")
+    (goto-char 2)
+    (should-not (nepali--word-bounds-at-point))
+    (goto-char 5)
+    (let ((bounds (nepali--word-bounds-at-point)))
+      (should (equal (buffer-substring-no-properties (car bounds) (cdr bounds))
+                     "राम")))))
+
+(ert-deftest nepali-summary-diagnostic-property-covers-detail-line ()
+  (with-temp-buffer
+    (let ((diagnostic '((line . 1)
+                        (column . 1)
+                        (incorrect . "गल्ति")
+                        (correction . "गल्ती")
+                        (kind . "Error")
+                        (category . "Spelling"))))
+      (nepali--summary-insert-diagnostic "source" diagnostic)
+      (goto-char (point-min))
+      (forward-line 1)
+      (should (eq (get-text-property (point) 'nepali-varnavinyas-diagnostic)
+                  diagnostic)))))
+
+(ert-deftest nepali-flymake-panic-uses-flymake-report-action ()
+  (let (reported)
+    (nepali--flymake-panic
+     (lambda (&rest args)
+       (setq reported args))
+     "failed")
+    (should (equal reported '(:panic :explanation "failed")))))
+
 (ert-deftest nepali-apply-correction-to-overlay-replaces-text ()
   (with-temp-buffer
     (insert "गल्ति")

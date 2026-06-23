@@ -40,8 +40,7 @@ Optional Magit-style global dispatcher binding:
 (use-package nepali
   :load-path "/path/to/nepali.el"
   :commands (nepali-dispatch nepali-flyspell-mode nepali-check-buffer nepali-check-word)
-  :bind (("C-c n" . nepali-dispatch))
-  :hook (text-mode . nepali-flyspell-mode))
+  :bind (("C-c n" . nepali-dispatch)))
 ```
 
 ### straight.el
@@ -50,6 +49,24 @@ Optional Magit-style global dispatcher binding:
 (use-package nepali
   :straight (:host github :repo "nepalibhasha/nepali.el"
              :files ("nepali.el" "ne_NP_dict.zip"))
+  :commands (nepali-dispatch nepali-flyspell-mode nepali-check-buffer nepali-check-word)
+  :bind (("C-c n" . nepali-dispatch)))
+```
+
+Avoid enabling `nepali-flyspell-mode` from a broad `text-mode` hook unless you
+want Nepali spellcheck and Devanagari input in every text-derived buffer,
+including commit messages and mail buffers. Prefer enabling it per buffer, from
+a narrower mode hook, or from a directory-local variable for Nepali-writing
+projects.
+
+If you want automatic Nepali spellcheck but manual input-method control:
+
+```elisp
+(use-package nepali
+  :straight (:host github :repo "nepalibhasha/nepali.el"
+             :files ("nepali.el" "ne_NP_dict.zip"))
+  :custom
+  (nepali-enable-input-method nil)
   :commands (nepali-dispatch nepali-flyspell-mode nepali-check-buffer nepali-check-word)
   :bind (("C-c n" . nepali-dispatch))
   :hook (text-mode . nepali-flyspell-mode))
