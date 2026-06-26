@@ -248,7 +248,7 @@ When `nepali-varnavinyas-mode` is enabled:
 
 `M-x nepali-dispatch` opens the optional Transient command menu and activates the configured Devanagari input method in the current buffer. It follows the same interaction style as Magit, uses compact grouped rows for narrower frames, and stays open after actions. If `transient` is not installed, all direct commands and key bindings still work.
 
-The menu includes a Typing section for selecting, toggling, and inspecting the active input method.
+The menu includes a Typing section with direct choices for ITRANS, InScript, AIBA, and Kyoto-Harvard, plus custom selection, toggling, and status.
 
 For a Magit-style global summon key, bind it in your config:
 

@@ -60,7 +60,19 @@
 
 (ert-deftest nepali-dispatch-commands-exist ()
   (should (commandp 'nepali-dispatch))
-  (should (commandp 'nepali-varnavinyas-dispatch)))
+  (should (commandp 'nepali-varnavinyas-dispatch))
+  (should (commandp 'nepali-select-input-method-itrans))
+  (should (commandp 'nepali-select-input-method-inscript))
+  (should (commandp 'nepali-select-input-method-aiba))
+  (should (commandp 'nepali-select-input-method-kyoto-harvard)))
+
+(ert-deftest nepali-dispatch-input-method-commands-activate-method ()
+  (with-temp-buffer
+    (let ((nepali-input-method "devanagari-itrans"))
+      (nepali-select-input-method-aiba)
+      (should (equal nepali-input-method "devanagari-aiba"))
+      (should (equal current-input-method "devanagari-aiba"))
+      (should (equal default-input-method "devanagari-aiba")))))
 
 (ert-deftest nepali-dispatch-activates-input-method ()
   (with-temp-buffer

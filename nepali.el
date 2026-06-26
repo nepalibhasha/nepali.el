@@ -927,6 +927,16 @@ to the beginning."
   (setq nepali-backend 'hunspell)
   (message "Nepali backend: hunspell"))
 
+(defun nepali--select-input-method (method activate)
+  "Select METHOD as the configured input method.
+
+When ACTIVATE is non-nil, activate METHOD in the current buffer."
+  (setq-local nepali-input-method method)
+  (setq-local default-input-method method)
+  (when (or activate current-input-method)
+    (activate-input-method method))
+  (message "Nepali input method set to %s" method))
+
 ;;;###autoload
 (defun nepali-toggle-input-method ()
   "Toggle the configured Nepali Devanagari input method."
@@ -948,11 +958,27 @@ to the beginning."
       (completing-read
        (format "Nepali input method (%s): " current)
        choices nil nil nil nil current))))
-  (setq-local nepali-input-method method)
-  (setq-local default-input-method method)
-  (when current-input-method
-    (activate-input-method method))
-  (message "Nepali input method set to %s" method))
+  (nepali--select-input-method method nil))
+
+(defun nepali-select-input-method-itrans ()
+  "Select and activate the Devanagari ITRANS input method."
+  (interactive)
+  (nepali--select-input-method "devanagari-itrans" t))
+
+(defun nepali-select-input-method-inscript ()
+  "Select and activate the Devanagari InScript input method."
+  (interactive)
+  (nepali--select-input-method "devanagari-inscript" t))
+
+(defun nepali-select-input-method-aiba ()
+  "Select and activate the Devanagari AIBA input method."
+  (interactive)
+  (nepali--select-input-method "devanagari-aiba" t))
+
+(defun nepali-select-input-method-kyoto-harvard ()
+  "Select and activate the Devanagari Kyoto-Harvard input method."
+  (interactive)
+  (nepali--select-input-method "devanagari-kyoto-harvard" t))
 
 (defun nepali-input-method-status ()
   "Show the current Nepali input method state."
@@ -1045,7 +1071,11 @@ This command is kept for compatibility.  New key bindings should call
       ("a" "apply" nepali-varnavinyas-apply-correction-at-point :transient t)
       ("A" "apply all" nepali-varnavinyas-apply-all-corrections :transient t)]]
     [["Type"
-      ("M" "select" nepali-select-input-method :transient t)
+      ("1" "itrans" nepali-select-input-method-itrans :transient t)
+      ("2" "inscript" nepali-select-input-method-inscript :transient t)
+      ("3" "aiba" nepali-select-input-method-aiba :transient t)
+      ("4" "kyoto" nepali-select-input-method-kyoto-harvard :transient t)
+      ("M" "custom" nepali-select-input-method :transient t)
       ("\\" "toggle" nepali-toggle-input-method :transient t)
       ("T" "status" nepali-input-method-status :transient t)]
      ["Modes"
